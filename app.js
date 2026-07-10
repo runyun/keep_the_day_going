@@ -1,0 +1,225 @@
+let db;
+let currentDetail=null;
+
+const request=indexedDB.open("StreakDB",1);
+
+request.onupgradeneeded=e=>{
+db=e.target.result;
+if(!db.objectStoreNames.contains("activities")){
+db.createObjectStore("activities",{keyPath:"id"});
+}
+};
+
+request.onsuccess=e=>{
+db=e.target.result;
+render();
+};
+
+function getActivities(){
+return new Promise(resolve=>{
+let tx=db.transaction("activities","readonly");
+let store=tx.objectStore("activities");
+let req=store.getAll();
+req.onsuccess=()=>resolve(req.result);
+});
+}
+
+function saveActivity(data){
+let tx=db.transaction("activities","readwrite");
+tx.objectStore("activities").put(data);
+}
+
+function deleteActivityDB(id){
+let tx=db.transaction("activities","readwrite");
+tx.objectStore("activities").delete(id);
+}
+
+function getStreak(records){
+if(records.length===0)return 0;
+
+let dates=records.map(r=>r.date).sort().reverse();
+let streak=0;
+let check=new Date();
+
+check.setHours(0,0,0,0);
+
+for(let date of dates){
+let d=new Date(date);
+d.setHours(0,0,0,0);
+
+let diff=(check-d)/(1000*60*60*24);
+
+if(diff===0||diff===1){
+streak++;
+check=d;
+}else{
+break;
+}
+}
+
+return streak;
+}
+
+async function render(){
+
+let list=await getActivities();
+
+activityContainer.innerHTML="";
+
+list.forEach(item=>{
+
+let today=new Date().toISOString().slice(0,10);
+
+let done=item.records.some(r=>r.date===today);
+
+let div=document.createElement("div");
+
+div.className="activity";
+
+div.innerHTML=`
+<div class="circle ${done?"complete":""}">
+${getStreak(item.records)}
+</div>
+${done?'<div class="done-icon">✓</div>':""}
+<div class="activity-name">${item.name}</div>
+<input class="memo" value="${item.memo||""}" placeholder="memo">
+`;
+
+let circle=div.querySelector(".circle");
+
+circle.onclick=()=>{
+
+if(done)return;
+
+item.records.push({
+date:today,
+memo:item.memo||""
+});
+
+saveActivity(item);
+
+circle.classList.add("animate");
+
+createParticles(circle);
+
+setTimeout(render,700);
+
+};
+
+div.querySelector(".memo").onchange=e=>{
+item.memo=e.target.value;
+saveActivity(item);
+};
+
+div.querySelector(".activity-name").onclick=()=>{
+openDetail(item);
+};
+
+activityContainer.appendChild(div);
+
+});
+}
+
+addBtn.onclick=()=>{
+modal.classList.remove("hidden");
+};
+
+cancelBtn.onclick=()=>{
+modal.classList.add("hidden");
+};
+
+createBtn.onclick=()=>{
+
+let name=activityName.value.trim();
+
+if(!name)return;
+
+saveActivity({
+id:Date.now(),
+name,
+memo:"",
+records:[]
+});
+
+activityName.value="";
+modal.classList.add("hidden");
+
+render();
+
+};
+
+function openDetail(item){
+
+currentDetail=item;
+
+detailTitle.innerText=item.name;
+
+historyList.innerHTML="";
+
+item.records.slice().reverse().forEach(r=>{
+historyList.innerHTML+=`
+<div class="history-item">
+📅 ${r.date}<br>
+📝 ${r.memo||"no memo"}
+</div>`;
+});
+
+detailModal.classList.remove("hidden");
+}
+
+closeDetailBtn.onclick=()=>{
+detailModal.classList.add("hidden");
+};
+
+deleteTodayBtn.onclick=()=>{
+
+let today=new Date().toISOString().slice(0,10);
+
+currentDetail.records=currentDetail.records.filter(r=>r.date!==today);
+
+saveActivity(currentDetail);
+
+openDetail(currentDetail);
+
+render();
+
+};
+
+deleteActivityBtn.onclick=()=>{
+
+deleteActivityDB(currentDetail.id);
+
+detailModal.classList.add("hidden");
+
+render();
+
+};
+
+function createParticles(element){
+
+let rect=element.getBoundingClientRect();
+
+let icons=["⭐","✨","🎉","🌸"];
+
+for(let i=0;i<15;i++){
+
+let p=document.createElement("div");
+
+p.className="particle";
+
+p.innerText=icons[Math.floor(Math.random()*icons.length)];
+
+p.style.left=rect.left+rect.width/2+window.scrollX+"px";
+
+p.style.top=rect.top+rect.height/2+window.scrollY+"px";
+
+p.style.setProperty("--x",(Math.random()-0.5)*200+"px");
+
+p.style.setProperty("--y",(Math.random()-0.5)*200+"px");
+
+document.body.appendChild(p);
+
+setTimeout(()=>p.remove(),1000);
+
+}
+}

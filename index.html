@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Keep Going</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+<h1>My Activities</h1>
+<button id="addBtn">＋ Add</button>
+</header>
+
+<main id="activityContainer"></main>
+
+<div id="modal" class="hidden">
+<div class="modal-box">
+<h2>Add</h2>
+<input id="activityName" placeholder="Name">
+<button id="createBtn">Create</button>
+<button id="cancelBtn">Cancel</button>
+</div>
+</div>
+
+<div id="detailModal" class="hidden">
+<div class="modal-box">
+<h2 id="detailTitle"></h2>
+<div id="historyList"></div>
+<button id="deleteTodayBtn">Delete Today</button>
+<button id="deleteActivityBtn">Delete Activity</button>
+<button id="closeDetailBtn">Close</button>
+</div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
