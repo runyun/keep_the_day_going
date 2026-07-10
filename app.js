@@ -1,225 +1,225 @@
 let db;
-let currentDetail=null;
+let currentDetail = null;
 
-const request=indexedDB.open("StreakDB",1);
+const request = indexedDB.open("StreakDB", 1);
 
-request.onupgradeneeded=e=>{
-db=e.target.result;
-if(!db.objectStoreNames.contains("activities")){
-db.createObjectStore("activities",{keyPath:"id"});
-}
+request.onupgradeneeded = e => {
+    db = e.target.result;
+    if (!db.objectStoreNames.contains("activities")) {
+        db.createObjectStore("activities", { keyPath: "id" });
+    }
 };
 
-request.onsuccess=e=>{
-db=e.target.result;
-render();
+request.onsuccess = e => {
+    db = e.target.result;
+    render();
 };
 
-function getActivities(){
-return new Promise(resolve=>{
-let tx=db.transaction("activities","readonly");
-let store=tx.objectStore("activities");
-let req=store.getAll();
-req.onsuccess=()=>resolve(req.result);
-});
+function getActivities() {
+    return new Promise(resolve => {
+        let tx = db.transaction("activities", "readonly");
+        let store = tx.objectStore("activities");
+        let req = store.getAll();
+        req.onsuccess = () => resolve(req.result);
+    });
 }
 
-function saveActivity(data){
-let tx=db.transaction("activities","readwrite");
-tx.objectStore("activities").put(data);
+function saveActivity(data) {
+    let tx = db.transaction("activities", "readwrite");
+    tx.objectStore("activities").put(data);
 }
 
-function deleteActivityDB(id){
-let tx=db.transaction("activities","readwrite");
-tx.objectStore("activities").delete(id);
+function deleteActivityDB(id) {
+    let tx = db.transaction("activities", "readwrite");
+    tx.objectStore("activities").delete(id);
 }
 
-function getStreak(records){
-if(records.length===0)return 0;
+function getStreak(records) {
+    if (records.length === 0) return 0;
 
-let dates=records.map(r=>r.date).sort().reverse();
-let streak=0;
-let check=new Date();
+    let dates = records.map(r => r.date).sort().reverse();
+    let streak = 0;
+    let check = new Date();
 
-check.setHours(0,0,0,0);
+    check.setHours(0, 0, 0, 0);
 
-for(let date of dates){
-let d=new Date(date);
-d.setHours(0,0,0,0);
+    for (let date of dates) {
+        let d = new Date(date);
+        d.setHours(0, 0, 0, 0);
 
-let diff=(check-d)/(1000*60*60*24);
+        let diff = (check - d) / (1000 * 60 * 60 * 24);
 
-if(diff===0||diff===1){
-streak++;
-check=d;
-}else{
-break;
+        if (diff === 0 || diff === 1) {
+            streak++;
+            check = d;
+        } else {
+            break;
+        }
+    }
+
+    return streak;
 }
-}
 
-return streak;
-}
+async function render() {
 
-async function render(){
+    let list = await getActivities();
 
-let list=await getActivities();
+    activityContainer.innerHTML = "";
 
-activityContainer.innerHTML="";
+    list.forEach(item => {
 
-list.forEach(item=>{
+        let today = new Date().toISOString().slice(0, 10);
 
-let today=new Date().toISOString().slice(0,10);
+        let done = item.records.some(r => r.date === today);
 
-let done=item.records.some(r=>r.date===today);
+        let div = document.createElement("div");
 
-let div=document.createElement("div");
+        div.className = "activity";
 
-div.className="activity";
-
-div.innerHTML=`
-<div class="circle ${done?"complete":""}">
+        div.innerHTML = `
+<div class="circle ${done ? "complete" : ""}">
 ${getStreak(item.records)}
 </div>
-${done?'<div class="done-icon">✓</div>':""}
+${done ? '<div class="done-icon">✓</div>' : ""}
 <div class="activity-name">${item.name}</div>
-<input class="memo" value="${item.memo||""}" placeholder="memo">
+<input class="memo" value="${item.memo || ""}" placeholder="memo">
 `;
 
-let circle=div.querySelector(".circle");
+        let circle = div.querySelector(".circle");
 
-circle.onclick=()=>{
+        circle.onclick = () => {
 
-if(done)return;
+            if (done) return;
 
-item.records.push({
-date:today,
-memo:item.memo||""
-});
+            item.records.push({
+                date: today,
+                memo: item.memo || ""
+            });
 
-saveActivity(item);
+            saveActivity(item);
 
-circle.classList.add("animate");
+            circle.classList.add("animate");
 
-createParticles(circle);
+            createParticles(circle);
 
-setTimeout(render,700);
+            setTimeout(render, 700);
 
-};
+        };
 
-div.querySelector(".memo").onchange=e=>{
-item.memo=e.target.value;
-saveActivity(item);
-};
+        div.querySelector(".memo").onchange = e => {
+            item.memo = e.target.value;
+            saveActivity(item);
+        };
 
-div.querySelector(".activity-name").onclick=()=>{
-openDetail(item);
-};
+        div.querySelector(".activity-name").onclick = () => {
+            openDetail(item);
+        };
 
-activityContainer.appendChild(div);
+        activityContainer.appendChild(div);
 
-});
+    });
 }
 
-addBtn.onclick=()=>{
-modal.classList.remove("hidden");
+addBtn.onclick = () => {
+    modal.classList.remove("hidden");
 };
 
-cancelBtn.onclick=()=>{
-modal.classList.add("hidden");
+cancelBtn.onclick = () => {
+    modal.classList.add("hidden");
 };
 
-createBtn.onclick=()=>{
+createBtn.onclick = () => {
 
-let name=activityName.value.trim();
+    let name = activityName.value.trim();
 
-if(!name)return;
+    if (!name) return;
 
-saveActivity({
-id:Date.now(),
-name,
-memo:"",
-records:[]
-});
+    saveActivity({
+        id: Date.now(),
+        name,
+        memo: "",
+        records: []
+    });
 
-activityName.value="";
-modal.classList.add("hidden");
+    activityName.value = "";
+    modal.classList.add("hidden");
 
-render();
+    render();
 
 };
 
-function openDetail(item){
+function openDetail(item) {
 
-currentDetail=item;
+    currentDetail = item;
 
-detailTitle.innerText=item.name;
+    detailTitle.innerText = item.name;
 
-historyList.innerHTML="";
+    historyList.innerHTML = "";
 
-item.records.slice().reverse().forEach(r=>{
-historyList.innerHTML+=`
+    item.records.slice().reverse().forEach(r => {
+        historyList.innerHTML += `
 <div class="history-item">
 📅 ${r.date}<br>
-📝 ${r.memo||"no memo"}
+📝 ${r.memo || "no memo"}
 </div>`;
-});
+    });
 
-detailModal.classList.remove("hidden");
+    detailModal.classList.remove("hidden");
 }
 
-closeDetailBtn.onclick=()=>{
-detailModal.classList.add("hidden");
+closeDetailBtn.onclick = () => {
+    detailModal.classList.add("hidden");
 };
 
-deleteTodayBtn.onclick=()=>{
+deleteTodayBtn.onclick = () => {
 
-let today=new Date().toISOString().slice(0,10);
+    let today = new Date().toISOString().slice(0, 10);
 
-currentDetail.records=currentDetail.records.filter(r=>r.date!==today);
+    currentDetail.records = currentDetail.records.filter(r => r.date !== today);
 
-saveActivity(currentDetail);
+    saveActivity(currentDetail);
 
-openDetail(currentDetail);
+    openDetail(currentDetail);
 
-render();
-
-};
-
-deleteActivityBtn.onclick=()=>{
-
-deleteActivityDB(currentDetail.id);
-
-detailModal.classList.add("hidden");
-
-render();
+    render();
 
 };
 
-function createParticles(element){
+deleteActivityBtn.onclick = () => {
 
-let rect=element.getBoundingClientRect();
+    deleteActivityDB(currentDetail.id);
 
-let icons=["⭐","✨","🎉","🌸"];
+    detailModal.classList.add("hidden");
 
-for(let i=0;i<15;i++){
+    render();
 
-let p=document.createElement("div");
+};
 
-p.className="particle";
+function createParticles(element) {
 
-p.innerText=icons[Math.floor(Math.random()*icons.length)];
+    let rect = element.getBoundingClientRect();
 
-p.style.left=rect.left+rect.width/2+window.scrollX+"px";
+    let icons = ["⭐", "✨", "🎉", "🌸"];
 
-p.style.top=rect.top+rect.height/2+window.scrollY+"px";
+    for (let i = 0; i < 15; i++) {
 
-p.style.setProperty("--x",(Math.random()-0.5)*200+"px");
+        let p = document.createElement("div");
 
-p.style.setProperty("--y",(Math.random()-0.5)*200+"px");
+        p.className = "particle";
 
-document.body.appendChild(p);
+        p.innerText = icons[Math.floor(Math.random() * icons.length)];
 
-setTimeout(()=>p.remove(),1000);
+        p.style.left = rect.left + rect.width / 2 + window.scrollX + "px";
 
-}
+        p.style.top = rect.top + rect.height / 2 + window.scrollY + "px";
+
+        p.style.setProperty("--x", (Math.random() - 0.5) * 200 + "px");
+
+        p.style.setProperty("--y", (Math.random() - 0.5) * 200 + "px");
+
+        document.body.appendChild(p);
+
+        setTimeout(() => p.remove(), 1000);
+
+    }
 }

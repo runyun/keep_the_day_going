@@ -1,191 +1,192 @@
-*{
-box-sizing:border-box;
+* {
+    box-sizing: border-box;
 }
 
-body{
-margin:0;
-padding:20px;
-font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-background:#f5f7fb;
-color:#333;
+body {
+    margin: 0;
+    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f7fb;
+    color: #333;
 }
 
-header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-margin-bottom:25px;
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
 }
 
-h1{
-font-size:26px;
+h1 {
+    font-size: 26px;
 }
 
-button{
-border:0;
-background:#7c9cff;
-color:white;
-padding:12px 18px;
-border-radius:20px;
-cursor:pointer;
+button {
+    border: 0;
+    background: #7c9cff;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 20px;
+    cursor: pointer;
 }
 
-button:active{
-transform:scale(.95);
+button:active {
+    transform: scale(.95);
 }
 
-#activityContainer{
-display:grid;
-grid-template-columns:repeat(3,1fr);
-gap:20px;
+#activityContainer {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
 }
 
-.activity{
-background:white;
-border-radius:30px;
-padding:20px;
-text-align:center;
-box-shadow:0 10px 30px rgba(0,0,0,.08);
-position:relative;
+.activity {
+    background: white;
+    border-radius: 30px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .08);
+    position: relative;
 }
 
-.circle{
-width:120px;
-height:120px;
-margin:auto;
-border-radius:50%;
-background:linear-gradient(145deg,#a8c7ff,#dce7ff);
-display:flex;
-align-items:center;
-justify-content:center;
-font-size:40px;
-font-weight:bold;
-cursor:pointer;
-transition:.3s;
+.circle {
+    width: 120px;
+    height: 120px;
+    margin: auto;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #a8c7ff, #dce7ff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: .3s;
 }
 
-.circle.complete{
-background:linear-gradient(145deg,#8ee3b5,#d9ffe9);
+.circle.complete {
+    background: linear-gradient(145deg, #8ee3b5, #d9ffe9);
 }
 
-.circle.animate{
-animation:pop .6s;
+.circle.animate {
+    animation: pop .6s;
 }
 
-@keyframes pop{
-50%{
-transform:scale(1.25);
-}
-}
-
-.done-icon{
-position:absolute;
-top:105px;
-right:35px;
-background:#7bdcb5;
-color:white;
-width:28px;
-height:28px;
-border-radius:50%;
-display:flex;
-align-items:center;
-justify-content:center;
+@keyframes pop {
+    50% {
+        transform: scale(1.25);
+    }
 }
 
-.activity-name{
-margin-top:20px;
-font-weight:bold;
-cursor:pointer;
+.done-icon {
+    position: absolute;
+    top: 105px;
+    right: 35px;
+    background: #7bdcb5;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.memo{
-width:100%;
-margin-top:12px;
-padding:10px;
-border-radius:15px;
-border:1px solid #ddd;
+.activity-name {
+    margin-top: 20px;
+    font-weight: bold;
+    cursor: pointer;
 }
 
-.hidden{
-display:none!important;
+.memo {
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px;
+    border-radius: 15px;
+    border: 1px solid #ddd;
+}
+
+.hidden {
+    display: none !important;
 }
 
 #modal,
-#detailModal{
-position:fixed;
-inset:0;
-background:rgba(0,0,0,.3);
-justify-content:center;
-align-items:center;
+#detailModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .3);
+    justify-content: center;
+    align-items: center;
 }
 
 #modal:not(.hidden),
-#detailModal:not(.hidden){
-display:flex;
+#detailModal:not(.hidden) {
+    display: flex;
 }
 
-.modal-box{
-background:white;
-width:90%;
-max-width:350px;
-padding:25px;
-border-radius:30px;
+.modal-box {
+    background: white;
+    width: 90%;
+    max-width: 350px;
+    padding: 25px;
+    border-radius: 30px;
 }
 
-.modal-box input{
-width:100%;
-padding:12px;
-border-radius:15px;
-border:1px solid #ddd;
-margin:15px 0;
+.modal-box input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 15px;
+    border: 1px solid #ddd;
+    margin: 15px 0;
 }
 
-.history-item{
-padding:10px;
-border-bottom:1px solid #eee;
+.history-item {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
 }
 
-.particle{
-position:fixed;
-font-size:22px;
-pointer-events:none;
-animation:fly 1s forwards;
+.particle {
+    position: fixed;
+    font-size: 22px;
+    pointer-events: none;
+    animation: fly 1s forwards;
 }
 
-@keyframes fly{
-from{
-opacity:1;
-transform:translate(0,0);
-}
-to{
-opacity:0;
-transform:translate(var(--x),var(--y));
-}
+@keyframes fly {
+    from {
+        opacity: 1;
+        transform: translate(0, 0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translate(var(--x), var(--y));
+    }
 }
 
-@media(max-width:500px){
-#activityContainer{
-grid-template-columns:repeat(1,1fr);
-gap:50px;
-}
+@media(max-width:500px) {
+    #activityContainer {
+        grid-template-columns: repeat(1, 1fr);
+        gap: 50px;
+    }
 
-.activity{
-padding:10px;
-border-radius:20px;
-}
+    .activity {
+        padding: 10px;
+        border-radius: 20px;
+    }
 
-.circle{
-width:90px;
-height:90px;
-font-size:30px;
-}
+    .circle {
+        width: 90px;
+        height: 90px;
+        font-size: 30px;
+    }
 
-h1{
-font-size:22px;
-}
+    h1 {
+        font-size: 22px;
+    }
 
-button{
-padding:10px 12px;
-font-size:14px;
-}
+    button {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
 }
