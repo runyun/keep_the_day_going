@@ -96,6 +96,21 @@ async function render() {
 
     let list = await getActivities();
 
+    let today = todayString();
+
+    let unfinished = list.filter(item => {
+        return !item.records.some(r => r.date === today);
+    });
+
+    let finished = list.filter(item => {
+        return item.records.some(r => r.date === today);
+    });
+
+    shuffle(unfinished);
+    shuffle(finished);
+
+    list = [...unfinished, ...finished];
+
     activityContainer.innerHTML = "";
 
     list.forEach(item => {
@@ -407,4 +422,13 @@ async function updateBackground() {
         document.body.classList.add("progress-low");
     }
 
+}
+
+function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+
+    return array;
 }
