@@ -102,7 +102,10 @@ ${done ? '<div class="done-icon">✓</div>' : ""}
 
             createParticles(circle);
 
-            setTimeout(render, 700);
+            setTimeout(()=>{
+                render();
+                updateBackground();
+            },700);
 
         };
 
@@ -116,8 +119,9 @@ ${done ? '<div class="done-icon">✓</div>' : ""}
         };
 
         activityContainer.appendChild(div);
-
     });
+
+    updateBackground();
 }
 
 addBtn.onclick = () => {
@@ -183,6 +187,7 @@ deleteTodayBtn.onclick = () => {
 
     render();
 
+    updateBackground();
 };
 
 deleteActivityBtn.onclick = () => {
@@ -334,3 +339,37 @@ closeRandomBtn.onclick = () => {
     randomRunning = false;
     spinBtn.disabled = false;
 };
+
+
+async function updateBackground() {
+    let list = await getActivities();
+
+    if (list.length === 0) {
+        document.body.className = "progress-low";
+        return;
+    }
+
+    let today = todayString();
+
+    let completed = list.filter(item => {
+        return item.records.some(r => r.date === today);
+    }).length;
+
+    let rate = completed / list.length;
+
+    document.body.className = "";
+
+    if (rate === 0) {
+        document.body.classList.add("progress-low");
+    }
+    else if (rate >= 0.8) {
+        document.body.classList.add("progress-high");
+    }
+    else if (rate >= 0.5) {
+        document.body.classList.add("progress-mid");
+    }
+    else {
+        document.body.classList.add("progress-low");
+    }
+
+}

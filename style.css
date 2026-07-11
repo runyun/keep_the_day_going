@@ -191,11 +191,6 @@ button:active {
     }
 }
 
-.header-right {
-    display: flex;
-    gap: 10px;
-}
-
 #randomModal {
     position: fixed;
     inset: 0;
@@ -283,4 +278,21 @@ button:active {
     to {
         text-shadow: 0 0 25px #7c9cff;
     }
+}
+
+
+body {
+    transition: background .8s ease;
+}
+
+body.progress-low {
+    background: #eef0f3;
+}
+
+body.progress-mid {
+    background: #f5d878;
+}
+
+body.progress-high {
+    background: #78c98b;
 }
