@@ -11,8 +11,10 @@
 <body>
 
     <header>
-        <h1>My Activities</h1>
-        <button id="addBtn">＋ Add</button>
+        <div class="header-right">
+            <button id="randomBtn">🎲 What Now</button>
+            <button id="addBtn">＋ Add</button>
+        </div>
     </header>
 
     <main id="activityContainer"></main>
@@ -33,6 +35,20 @@
             <button id="deleteTodayBtn">Delete Today</button>
             <button id="deleteActivityBtn">Delete Activity</button>
             <button id="closeDetailBtn">Close</button>
+        </div>
+    </div>
+    <div id="randomModal" class="hidden">
+        <div class="random-box">
+            <h2>🎲 What Now?</h2>
+
+            <div id="randomName">Ready</div>
+            <div id="randomResult" class="hidden"></div>
+
+            <div class="random-buttons">
+                <button id="spinBtn">Spin</button>
+                <button id="closeRandomBtn">Close</button>
+            </div>
+
         </div>
     </div>
 

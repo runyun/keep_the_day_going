@@ -224,10 +224,113 @@ function createParticles(element) {
     }
 }
 
-function todayString(){
+function todayString() {
     const d = new Date();
     const y = d.getFullYear();
-    const m = String(d.getMonth()+1).padStart(2,"0");
-    const day = String(d.getDate()).padStart(2,"0");
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
 }
+
+let randomTimer = null;
+let randomRunning = false;
+let randomSelected = null;
+
+randomBtn.onclick = async () => {
+    let list = await getActivities();
+    let today = todayString();
+
+    let available = list.filter(item => {
+        return !item.records.some(r => r.date === today);
+    });
+
+    if (list.length === 0) {
+        alert("Go add activity");
+        return;
+    }
+
+    if (available.length === 0) {
+        alert("🎉 Already completed all activities!");
+        return;
+    }
+
+    spinBtn.classList.remove("hidden");
+    randomModal.classList.remove("hidden");
+    randomName.classList.remove("hidden");
+    randomName.innerText = "Ready";
+    randomResult.classList.add("hidden");
+    randomSelected = null;
+};
+
+
+spinBtn.onclick = async () => {
+
+    if (randomRunning) return;
+
+    let list = await getActivities();
+    let today = todayString();
+
+    let available = list.filter(item => {
+        return !item.records.some(r => r.date === today);
+    });
+
+    if (available.length === 0) {
+        randomName.innerText = "🎉 All Completed！";
+        return;
+    }
+
+    randomRunning = true;
+    spinBtn.classList.add("hidden");
+
+    let startTime = Date.now();
+    let duration = 3000;
+    let speed = 80;
+
+    function randomPick() {
+        let index = Math.floor(Math.random() * available.length);
+        return available[index];
+
+    }
+
+    function run() {
+        let elapsed = Date.now() - startTime;
+        let item = randomPick();
+
+        randomName.innerText = item.name;
+        randomSelected = item;
+
+        if (elapsed >= duration) {
+            randomRunning = false;
+            spinBtn.disabled = false;
+
+            showRandomResult(randomSelected);
+            return;
+        }
+
+        let progress = elapsed / duration;
+        speed = 80 + (progress * 250);
+        randomTimer = setTimeout(run, speed);
+    }
+    run();
+};
+
+
+function showRandomResult(item) {
+    randomName.classList.add("hidden");
+    randomResult.classList.add("random-winner");
+    randomResult.classList.remove("hidden");
+    randomResult.innerText = "🎉 " + item.name;
+    randomResult.classList.add("random-winner");
+}
+
+
+
+closeRandomBtn.onclick = () => {
+    if (randomTimer) {
+        clearTimeout(randomTimer);
+    }
+
+    randomModal.classList.add("hidden");
+    randomRunning = false;
+    spinBtn.disabled = false;
+};

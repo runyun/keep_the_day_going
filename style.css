@@ -190,3 +190,97 @@ button:active {
         font-size: 14px;
     }
 }
+
+.header-right {
+    display: flex;
+    gap: 10px;
+}
+
+#randomModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .35);
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+}
+
+#randomModal:not(.hidden) {
+    display: flex;
+}
+
+.random-box {
+    background: rgba(255, 255, 255, .95);
+    width: 90%;
+    max-width: 350px;
+    padding: 30px 20px;
+    border-radius: 35px;
+    text-align: center;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, .15);
+}
+
+.random-box h2 {
+    margin-top: 0;
+}
+
+#randomName {
+    font-size: 40px;
+    font-weight: bold;
+    min-height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 30px 0;
+}
+
+#randomResult {
+    font-size: 48px;
+    font-weight: bold;
+    color: #7c9cff;
+    animation: resultPop .8s;
+    margin: 20px;
+}
+
+@keyframes resultPop {
+    0% {
+        transform: scale(.5);
+        opacity: 0;
+    }
+
+    70% {
+        transform: scale(1.2);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.random-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.random-buttons button {
+    width: 100%;
+}
+
+#closeRandomBtn {
+    background: #aaa;
+}
+
+.random-winner {
+    animation: winnerGlow 1s infinite alternate;
+}
+
+@keyframes winnerGlow {
+    from {
+        text-shadow: 0 0 5px #7c9cff;
+    }
+
+    to {
+        text-shadow: 0 0 25px #7c9cff;
+    }
+}
