@@ -80,8 +80,8 @@ button:active {
 
 .done-icon {
     position: absolute;
-    top: 105px;
-    right: 35px;
+    top: 10px;
+    right: 5px;
     background: #7bdcb5;
     color: white;
     width: 28px;
@@ -166,8 +166,8 @@ button:active {
 
 @media(max-width:500px) {
     #activityContainer {
-        grid-template-columns: repeat(1, 1fr);
-        gap: 50px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 30px;
     }
 
     .activity {

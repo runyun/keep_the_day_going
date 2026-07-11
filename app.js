@@ -68,7 +68,7 @@ async function render() {
 
     list.forEach(item => {
 
-        let today = new Date().toISOString().slice(0, 10);
+        let today = todayString();
 
         let done = item.records.some(r => r.date === today);
 
@@ -173,7 +173,7 @@ closeDetailBtn.onclick = () => {
 
 deleteTodayBtn.onclick = () => {
 
-    let today = new Date().toISOString().slice(0, 10);
+    let today = todayString();;
 
     currentDetail.records = currentDetail.records.filter(r => r.date !== today);
 
@@ -222,4 +222,12 @@ function createParticles(element) {
         setTimeout(() => p.remove(), 1000);
 
     }
+}
+
+function todayString(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
 }
