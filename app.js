@@ -434,7 +434,7 @@ function shuffle(array) {
 }
 
 
-historyBtn.onclick = async () => {
+document.getElementById("historyBtn").onclick=async()=>{
     let list = await getActivities();
 
     heatmapContainer.innerHTML = "";
@@ -443,7 +443,7 @@ historyBtn.onclick = async () => {
         heatmapContainer.innerHTML += createHeatmap(item);
     });
 
-    historyModal.classList.remove("hidden");
+    document.getElementById("historyModal").classList.remove("hidden");
     setTimeout(()=>{
         document.querySelectorAll(".heatmap-scroll").forEach(el=>{
         el.scrollLeft=el.scrollWidth;
