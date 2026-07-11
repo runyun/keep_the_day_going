@@ -60,6 +60,38 @@ function getStreak(records) {
     return streak;
 }
 
+function getBestStreak(records) {
+    if (records.length === 0) return 0;
+
+    let dates = records
+        .map(r => r.date)
+        .sort();
+
+    let best = 1;
+    let current = 1;
+
+    for (let i = 1; i < dates.length; i++) {
+        let prev = new Date(dates[i - 1]);
+        let now = new Date(dates[i]);
+
+        let diff = (now - prev) / (1000 * 60 * 60 * 24);
+
+        if (diff === 1) {
+            current++;
+        } else {
+            current = 1;
+        }
+
+        if (current > best) {
+            best = current;
+        }
+
+    }
+
+    return best;
+}
+
+
 async function render() {
 
     let list = await getActivities();
@@ -102,10 +134,10 @@ ${done ? '<div class="done-icon">✓</div>' : ""}
 
             createParticles(circle);
 
-            setTimeout(()=>{
+            setTimeout(() => {
                 render();
                 updateBackground();
-            },700);
+            }, 700);
 
         };
 
@@ -156,7 +188,10 @@ function openDetail(item) {
 
     currentDetail = item;
 
-    detailTitle.innerText = item.name;
+    detailTitle.innerHTML = `
+        <span>${item.name}</span>
+        <span class="best-streak">🔥 ${getBestStreak(item.records)} days</span>
+    `;
 
     historyList.innerHTML = "";
 

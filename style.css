@@ -296,3 +296,21 @@ body.progress-mid {
 body.progress-high {
     background: #78c98b;
 }
+
+#detailTitle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 22px;
+}
+
+.best-streak {
+    font-size: 13px;
+    font-weight: 600;
+    color: #ff8c42;
+    background: #fff1e6;
+    padding: 6px 12px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
