@@ -432,3 +432,144 @@ function shuffle(array) {
 
     return array;
 }
+
+
+historyBtn.onclick = async () => {
+    let list = await getActivities();
+
+    heatmapContainer.innerHTML = "";
+
+    list.forEach(item => {
+        heatmapContainer.innerHTML += createHeatmap(item);
+    });
+
+    historyModal.classList.remove("hidden");
+    setTimeout(()=>{
+        document.querySelectorAll(".heatmap-scroll").forEach(el=>{
+        el.scrollLeft=el.scrollWidth;
+        });
+    },100);
+};
+
+
+closeHistoryBtn.onclick = () => {
+    historyModal.classList.add("hidden");
+};
+
+
+function createHeatmap(activity) {
+    let weeks = createWeeks();
+
+    let html = `
+        <div class="heatmap-title">
+        ${activity.name}
+        </div>
+
+        <div class="heatmap-wrapper">
+            <div class="week-label-area">
+                <div class="week-labels">
+                    <div>一</div>
+                    <div></div>
+                    <div>三</div>
+                    <div></div>
+                    <div>五</div>
+                    <div></div>
+                    <div>日</div>
+                </div>
+            </div>
+
+        <div class="heatmap-scroll">
+        <div class="heatmap-inner">
+
+        <div class="month-row">
+        ${createMonths(weeks)}
+        </div>
+
+        <div class="heatmap">
+        `;
+
+
+    weeks.forEach(week => {
+        html += `<div class="week">`;
+        week.forEach(day => {
+            if (!day) {
+                html += `<div class="heat-cell"></div>`;
+                return;
+            }
+
+            let date = formatDate(day);
+            let done = activity.records.some(r => r.date === date);
+
+            html += `<div class="heat-cell ${done ? "done" : ""}"></div>`;
+        });
+
+        html += `</div>`;
+    });
+
+    html += `
+        </div>
+        </div>
+        </div>
+        </div>
+        `;
+
+    return html;
+}
+
+
+function createWeeks() {
+    let result = [];
+    let today = new Date();
+    let start = new Date();
+
+    start.setMonth(start.getMonth() - 6);
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+
+    let current = new Date(start);
+    let week = [];
+
+    while (current <= today) {
+        week.push(new Date(current));
+        if (week.length === 7) {
+            result.push(week);
+            week = [];
+        }
+
+        current.setDate(current.getDate() + 1);
+    }
+
+    if (week.length) {
+        while (week.length < 7) {
+            week.push(null);
+        }
+        result.push(week);
+    }
+
+    return result;
+}
+
+function createMonths(weeks) {
+    let html = "";
+    let lastMonth = -1;
+
+    weeks.forEach(week => {
+        let date = week.find(d => d);
+        let month = date.getMonth();
+
+        if (month !== lastMonth) {
+            html += `<div class="month">${month + 1}月</div>`;
+            lastMonth = month;
+        } else {
+            html += `<div class="month"></div>`;
+        }
+    });
+    return html;
+
+}
+
+function formatDate(date) {
+    let y = date.getFullYear();
+    let m = String(date.getMonth() + 1).padStart(2, "0");
+    let d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+}
