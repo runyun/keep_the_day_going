@@ -14,7 +14,9 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 25px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 h1 {
@@ -189,6 +191,26 @@ button:active {
         padding: 10px 12px;
         font-size: 14px;
     }
+
+    .difficulty-picker {
+        top: 10px;
+    }
+
+    .difficulty-picker button {
+        width: 30px;
+        height: 30px;
+        font-size: 14px;
+    }
+
+    #statsBar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    #momentumBarWrapper {
+        width: 100%;
+    }
 }
 
 #randomModal {
@@ -328,6 +350,20 @@ body.progress-high {
     display: flex;
 }
 
+#rewardModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .35);
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+}
+
+#rewardModal:not(.hidden) {
+    display: flex;
+}
+
+
 .history-box {
     background: white;
     width: 95%;
@@ -416,4 +452,211 @@ body.progress-high {
 
 #closeHistoryBtn {
     margin-top: 20px;
+}
+
+/* ===== 新增：Header 統計橫欄 ===== */
+#statsBar {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    background: white;
+    padding: 12px 18px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .06);
+    flex-wrap: wrap;
+}
+
+#levelDisplay {
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+#pointsDisplay {
+    font-weight: bold;
+    white-space: nowrap;
+    transition: color .5s;
+}
+
+#pointsDisplay.points-warn {
+    color: #e0a030;
+}
+
+#pointsDisplay.points-danger {
+    color: #e05a3c;
+}
+
+#momentumBarWrapper {
+    flex: 1;
+    min-width: 120px;
+    height: 10px;
+    background: #eee;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+#momentumBar {
+    height: 100%;
+    background: linear-gradient(90deg, #7c9cff, #a8c7ff);
+    width: 50%;
+    transition: width .6s ease;
+}
+
+/* ===== 新增：難度選擇 ===== */
+.difficulty-picker {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    background: white;
+    padding: 8px 12px;
+    border-radius: 30px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, .15);
+    z-index: 5;
+}
+
+.difficulty-picker button {
+    background: #f5f7fb;
+    color: #333;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 18px;
+    padding: 0;
+    cursor: pointer;
+}
+
+.difficulty-picker button:hover {
+    background: #e0e6ff;
+}
+
+/* ===== 新增：Bonus 文字 ===== */
+.bonus-text {
+    position: absolute;
+    top: 35%;
+    left: 50%;
+    color: #ff8c42;
+    font-weight: bold;
+    font-size: 18px;
+    pointer-events: none;
+    white-space: nowrap;
+    animation: bonusFloat 1.2s forwards;
+}
+
+@keyframes bonusFloat {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(.6);
+    }
+
+    30% {
+        opacity: 1;
+        transform: translate(-50%, -60%) scale(1.2);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -120%) scale(1);
+    }
+}
+
+/* ===== 新增：里程碑 / 升級慶祝 ===== */
+.celebration-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    animation: fadeInOut 2.2s ease;
+}
+
+.celebration-box {
+    background: white;
+    padding: 40px 50px;
+    border-radius: 30px;
+    text-align: center;
+    font-size: 26px;
+    font-weight: bold;
+    color: #7c9cff;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .3);
+    animation: resultPop .8s;
+    line-height: 1.6;
+}
+
+@keyframes fadeInOut {
+    0% {
+        opacity: 0;
+    }
+
+    10% {
+        opacity: 1;
+    }
+
+    90% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+
+/* ===== 新增：獎賞商店 ===== */
+.reward-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+    gap: 10px;
+}
+
+.reward-item span {
+    flex: 1;
+    text-align: left;
+}
+
+.reward-item button {
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+.reward-item .deleteRewardBtn {
+    background: #e88;
+}
+
+.reward-add-form {
+    display: flex;
+    gap: 8px;
+    margin: 15px 0;
+    align-items: center;
+}
+
+.reward-add-form input {
+    margin: 0;
+}
+
+#rewardName {
+    flex: 2;
+}
+
+#rewardCost {
+    flex: 1;
+}
+
+.reward-stats {
+    font-size: 13px;
+    color: #777;
+    margin-top: 10px;
+    line-height: 1.6;
+}
+
+#rewardWeeklyInfo {
+    font-size: 15px;
+    margin-bottom: 10px;
 }

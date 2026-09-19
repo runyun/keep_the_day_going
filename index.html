@@ -13,8 +13,17 @@
     <header>
         <button id="randomBtn">🎲 What Now</button>
         <button id="historyBtn">📊 History</button>
+        <button id="rewardBtn">🎁 Rewards</button>
         <button id="addBtn">＋ Add</button>
     </header>
+
+    <div id="statsBar">
+        <div id="levelDisplay">🌱 Lv.1 · 0</div>
+        <div id="pointsDisplay">🎁 0 pt</div>
+        <div id="momentumBarWrapper">
+            <div id="momentumBar"></div>
+        </div>
+    </div>
 
     <main id="activityContainer"></main>
 
@@ -36,6 +45,7 @@
             <button id="closeDetailBtn">Close</button>
         </div>
     </div>
+
     <div id="randomModal" class="hidden">
         <div class="random-box">
             <h2>🎲 What Now?</h2>
@@ -56,6 +66,21 @@
             <h2>📊 Activity History</h2>
             <div id="heatmapContainer"></div>
             <button id="closeHistoryBtn">Close</button>
+        </div>
+    </div>
+
+    <div id="rewardModal" class="hidden">
+        <div class="modal-box">
+            <h2>🎁 Reward Shop</h2>
+            <div id="rewardWeeklyInfo"></div>
+            <div id="rewardList"></div>
+            <div class="reward-add-form">
+                <input id="rewardName" placeholder="Reward name">
+                <input id="rewardCost" type="number" min="1" placeholder="pt">
+                <button id="addRewardBtn">Add</button>
+            </div>
+            <div class="reward-stats" id="rewardLifetimeStats"></div>
+            <button id="closeRewardBtn">Close</button>
         </div>
     </div>
 
