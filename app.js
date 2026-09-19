@@ -362,8 +362,10 @@ ${done ? '<div class="done-icon">✓</div>' : ""}
         let circle = div.querySelector(".circle");
         let picker = div.querySelector(".difficulty-picker");
 
-        circle.onclick = () => {
+        circle.onclick = (e) => {
+            e.stopPropagation();
             if (done) return;
+            document.querySelectorAll(".difficulty-picker").forEach(p => p.classList.add("hidden"));
             picker.classList.remove("hidden");
         };
 
@@ -396,7 +398,6 @@ ${done ? '<div class="done-icon">✓</div>' : ""}
 }
 
 /* ===================== 打卡完成邏輯 ===================== */
-
 async function completeActivity(item, diff, div, circle) {
 
     const pointsMap = { easy: 1, medium: 2, hard: 3 };
@@ -446,11 +447,23 @@ async function completeActivity(item, diff, div, circle) {
         }
     }, 750);
 
+    // 不呼叫 render()，改為原地更新這張卡片，避免位置洗牌
     setTimeout(() => {
-        render();
+        circle.classList.add("complete");
+        circle.textContent = getStreak(item.records);
+        circle.onclick = null; // 已完成，不可再點擊
+
+        if (!div.querySelector(".done-icon")) {
+            let doneIcon = document.createElement("div");
+            doneIcon.className = "done-icon";
+            doneIcon.textContent = "✓";
+            div.insertBefore(doneIcon, div.querySelector(".activity-name"));
+        }
+
+        updateBackground();
+        updateHeaderStats();
     }, 700);
 }
-
 /* ===================== Bonus / 慶祝動畫 ===================== */
 
 function showBonusText(div) {
@@ -517,6 +530,10 @@ function createParticles(element) {
 addBtn.onclick = () => {
     modal.classList.remove("hidden");
 };
+
+document.addEventListener("click", () => {
+    document.querySelectorAll(".difficulty-picker").forEach(p => p.classList.add("hidden"));
+});
 
 cancelBtn.onclick = () => {
     modal.classList.add("hidden");
@@ -644,8 +661,8 @@ closeRandomBtn.onclick = () => {
 /* ===================== History Heatmap ===================== */
 
 historyBtn.onclick = async () => {
-    await renderHeatmap();
     historyModal.classList.remove("hidden");
+    await renderHeatmap();
 };
 
 closeHistoryBtn.onclick = () => {
@@ -654,8 +671,11 @@ closeHistoryBtn.onclick = () => {
 
 async function renderHeatmap() {
     let list = await getActivities();
-    let allDates = new Set();
-    list.forEach(item => item.records.forEach(r => allDates.add(r.date)));
+    let countByDate = {};
+
+    list.forEach(item => item.records.forEach(r => {
+        countByDate[r.date] = (countByDate[r.date] || 0) + 1;
+    }));
 
     let today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -692,6 +712,13 @@ async function renderHeatmap() {
     });
     monthHtml += "</div>";
 
+    function heatTier(count) {
+        if (!count) return "";
+        if (count <= 3) return "heat-1";
+        if (count <= 6) return "heat-2";
+        return "heat-3";
+    }
+
     let heatmapHtml = '<div class="heatmap">';
     weeks.forEach(week => {
         heatmapHtml += '<div class="week">';
@@ -700,8 +727,9 @@ async function renderHeatmap() {
                 heatmapHtml += '<div class="heat-cell" style="background:transparent"></div>';
             } else {
                 let dateStr = formatDate(day);
-                let done = allDates.has(dateStr);
-                heatmapHtml += `<div class="heat-cell ${done ? "done" : ""}" title="${dateStr}"></div>`;
+                let count = countByDate[dateStr] || 0;
+                let tier = heatTier(count);
+                heatmapHtml += `<div class="heat-cell ${tier}" title="${dateStr}${count ? " · " + count + "次" : ""}"></div>`;
             }
         });
         heatmapHtml += "</div>";
@@ -725,6 +753,12 @@ async function renderHeatmap() {
             </div>
         </div>
     `;
+
+    // 滾動到最右邊（最近日期）
+    let scrollEl = container.querySelector(".heatmap-scroll");
+    requestAnimationFrame(() => {
+        scrollEl.scrollLeft = scrollEl.scrollWidth;
+    });
 }
 
 /* ===================== 獎賞商店 ===================== */

@@ -446,8 +446,16 @@ body.progress-high {
     background: #eee;
 }
 
-.heat-cell.done {
-    background: #39c463;
+.heat-cell.heat-1 {
+    background: #b7f0c8;
+}
+
+.heat-cell.heat-2 {
+    background: #56d17e;
+}
+
+.heat-cell.heat-3 {
+    background: #1fa54c;
 }
 
 #closeHistoryBtn {
