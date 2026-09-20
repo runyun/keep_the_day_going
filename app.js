@@ -95,6 +95,17 @@ function formatDateShort(dateStr){
   return `${Number(m)}/${Number(d)}`;
 }
 
+function getHeaderDateText(){
+  const now = new Date();
+  const weekday = ['SUN','MON','TUE','WED','THU','FRI','SAT'][now.getDay()];
+  return `${now.getMonth()+1}/${now.getDate()} ${weekday}`;
+}
+
+function renderHeaderDate(){
+  const el = document.getElementById('todayHeaderDate');
+  if(el) el.textContent = getHeaderDateText();
+}
+
 function fmtDate(d){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
@@ -1001,10 +1012,12 @@ document.getElementById('doItBtn').addEventListener('click', ()=>{
 applyDailyMomentumUpdate();
 recalcPoints();
 recalcLevel();
+renderHeaderDate();
 renderAll();
 scrollToNow();
 
 setInterval(()=>{ updateNowLine(); }, 30000);
+setInterval(()=>{ renderHeaderDate(); }, 60000);
 
 setInterval(()=>{
   renderTodoTags();
