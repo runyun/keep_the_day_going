@@ -2,6 +2,65 @@ const STORAGE_KEY = 'dailyQuestState';
 const HOUR_HEIGHT = 60;
 const PASTEL_COLORS = ['#fff59d','#ffccbc','#c8e6c9','#bbdefb','#e1bee7','#ffe0b2'];
 
+// ---------- Spin Config ----------
+const SPIN_BONUS = {
+  small:   { points: 2,  xp: 0  },
+  mediumR: { points: 5,  xp: 0  },
+  mediumG: { points: 0,  xp: 15 },
+  largeR:  { points: 10, xp: 0  },
+  largeG:  { points: 0,  xp: 30 },
+};
+
+const SPIN_LABELS = {
+  miss:    { emoji:'💨', text:'No luck this time', cls:'tier-miss' },
+  small:   { emoji:'✨', text:'Small Win!', cls:'tier-small' },
+  mediumR: { emoji:'💰', text:'Medium Win! (Reward)', cls:'tier-medium-r' },
+  mediumG: { emoji:'🌟', text:'Medium Win! (Growth)', cls:'tier-medium-g' },
+  largeR:  { emoji:'💎', text:'JACKPOT! (Reward)', cls:'tier-large-r' },
+  largeG:  { emoji:'🚀', text:'JACKPOT! (Growth)', cls:'tier-large-g' },
+};
+
+/**
+ * New spin probability model.
+ * winChance = taskScale * momentumBase(momentum) + starBonus(stars)
+ *
+ * taskScale   = max(1/sqrt(taskCount), 0.4)   -> fewer tasks = higher win odds (keeps the game exciting
+ *                                                 for users with few activities, and prevents users who
+ *                                                 pile up tons of tasks from farming an unfairly high win rate)
+ * momentumBase = 0.12 + 0.18 * (momentum/100) -> ranges 12% ~ 30% as momentum goes 0 -> 100
+ * starBonus    = (stars - 1) * 0.04           -> harder tasks (more stars) give a flat bonus to win chance,
+ *                                                 rewarding people for taking on tougher challenges
+ */
+function getSpinProbabilities(momentum, taskCount, stars){
+  const safeTaskCount = Math.max(1, taskCount || 1);
+  const taskScale = Math.max(1 / Math.sqrt(safeTaskCount), 0.4);
+  const momentumBase = 0.12 + (momentum/100) * 0.18;
+  const starBonus = ((stars || 1) - 1) * 0.04;
+
+  let winChance = taskScale * momentumBase + starBonus;
+  winChance = Math.max(0, Math.min(1, winChance));
+
+  return {
+    miss:    1 - winChance,
+    small:   winChance * 0.50,
+    mediumR: winChance * 0.175,
+    mediumG: winChance * 0.175,
+    largeR:  winChance * 0.075,
+    largeG:  winChance * 0.075,
+  };
+}
+
+function pickSpinTier(momentum, taskCount, stars){
+  const probs = getSpinProbabilities(momentum, taskCount, stars);
+  const r = Math.random();
+  let cum = 0;
+  for(const tier of Object.keys(probs)){
+    cum += probs[tier];
+    if(r <= cum) return tier;
+  }
+  return 'miss';
+}
+
 // ---------- State ----------
 function loadState(){
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -60,20 +119,100 @@ function getStreak(a){
   return streak;
 }
 
-function applyMomentumDecay(){
-  const last = new Date(state.lastActiveDate);
-  const today = new Date(todayStr());
-  const diffDays = Math.round((today-last)/86400000);
-  if(diffDays>0){
-    state.momentum = Math.max(0, state.momentum - diffDays*15);
-    state.lastActiveDate = todayStr();
+/**
+ * Daily momentum adjustment based on YESTERDAY's completion ratio
+ * (activities completed yesterday / total current activities).
+ *
+ * Tiered, "addictive" design (like a mini game each morning):
+ *  - Perfect day (100%)      -> big reward (+25) to reinforce the winning streak feeling
+ *  - Good day (>=70%)        -> solid reward (+15)
+ *  - Okay day (>=40%)        -> small reward (+5)
+ *  - Weak day (>0% but <40%) -> mild penalty (-10), softer than total inactivity
+ *  - Zero completions (0%)   -> harsh penalty (-20) to create loss-aversion and pull the user back in
+ */
+function computeMomentumShift(ratio){
+  if(ratio >= 1) return 25;
+  if(ratio <= 0) return -20;
+  if(ratio >= 0.7) return 15;
+  if(ratio >= 0.4) return 5;
+  return -10;
+}
+
+function showMomentumPopup(change, ratio, completedYesterday, totalTasks){
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'momentumPopupOverlay';
+  overlay.style.position = 'fixed';
+  overlay.style.top = 0;
+  overlay.style.left = 0;
+  overlay.style.right = 0;
+  overlay.style.bottom = 0;
+  overlay.style.background = 'rgba(0,0,0,0.5)';
+  overlay.style.display = 'flex';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.style.zIndex = 9999;
+
+  const positive = change >= 0;
+  const pct = Math.round(ratio*100);
+
+  overlay.innerHTML = `
+    <div class="modal-content" style="max-width:320px;width:90%;text-align:center;background:#fff;border-radius:16px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,0.25);">
+      <div style="font-size:32px;margin-bottom:8px;">${positive ? '⚡' : '⚠️'}</div>
+      <h3 style="margin:0 0 8px;">${positive ? 'Momentum Boost!' : 'Momentum Drop'}</h3>
+      <p style="margin:0 0 4px;color:#555;font-size:14px;">
+        Yesterday: ${completedYesterday}/${totalTasks} tasks completed (${pct}%)
+      </p>
+      <p style="font-size:28px;font-weight:bold;margin:12px 0;color:${positive ? '#2e7d32' : '#c62828'};">
+        ${positive ? '+' : ''}${change}%
+      </p>
+      <button id="momentumPopupCloseBtn" class="btn-primary" style="margin-top:8px;">OK</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = ()=> overlay.remove();
+  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) close(); });
+  document.getElementById('momentumPopupCloseBtn').addEventListener('click', close);
+}
+
+function applyDailyMomentumUpdate(){
+  const today = todayStr();
+  if(state.lastActiveDate === today) return; // already handled today
+
+  const yestDate = new Date();
+  yestDate.setDate(yestDate.getDate()-1);
+  const yesterdayStr = fmtDate(yestDate);
+
+  const totalTasks = state.activities.length;
+
+  if(totalTasks === 0){
+    // Nothing to judge yet — just move the date forward, no penalty/reward.
+    state.lastActiveDate = today;
     saveState();
+    return;
   }
+
+  const completedYesterday = state.activities.filter(a =>
+    a.completions.some(c => c.date === yesterdayStr)
+  ).length;
+
+  const ratio = completedYesterday / totalTasks;
+  const change = computeMomentumShift(ratio);
+
+  state.momentum = Math.max(0, Math.min(100, state.momentum + change));
+  state.lastActiveDate = today;
+  saveState();
+
+  showMomentumPopup(change, ratio, completedYesterday, totalTasks);
 }
 
 function recalcPoints(){
   let earned = 0;
-  state.activities.forEach(a=>a.completions.forEach(c=>earned += c.points));
+  state.activities.forEach(a=>a.completions.forEach(c=>{
+    earned += c.points;
+    if(c.spin && c.spin.bonusPoints) earned += c.spin.bonusPoints;
+  }));
   const spent = state.redemptions.reduce((s,r)=>s+r.cost, 0);
   state.points = earned - spent;
 }
@@ -82,6 +221,7 @@ function recalcLevel(){
   let totalXP = 0;
   state.activities.forEach(a=>a.completions.forEach(c=>{
     totalXP += (c.xpGained !== undefined) ? c.xpGained : c.stars*10;
+    if(c.spin && c.spin.bonusXP) totalXP += c.spin.bonusXP;
   }));
   let level = 1, xpToNext = 70, remaining = totalXP;
   while(remaining >= xpToNext){
@@ -94,6 +234,14 @@ function recalcLevel(){
   state.xpToNext = xpToNext;
 }
 
+function spinBadgeHTML(c){
+  if(!c.spin || c.spin.tier==='miss') return '';
+  const parts = [];
+  if(c.spin.bonusPoints>0) parts.push(`+${c.spin.bonusPoints}pt`);
+  if(c.spin.bonusXP>0) parts.push(`+${c.spin.bonusXP}xp`);
+  return ` <span class="spin-badge">🎰${parts.join('')}</span>`;
+}
+
 // ---------- Modal generic ----------
 function openModal(id){ document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
@@ -101,7 +249,11 @@ document.querySelectorAll('[data-close]').forEach(btn=>{
   btn.addEventListener('click', ()=>closeModal(btn.dataset.close));
 });
 document.querySelectorAll('.modal-overlay').forEach(overlay=>{
-  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.classList.add('hidden'); });
+  overlay.addEventListener('click', (e)=>{
+    if(e.target===overlay && overlay.dataset.noOutsideClose !== 'true'){
+      overlay.classList.add('hidden');
+    }
+  });
 });
 
 // ---------- Header menu ----------
@@ -314,7 +466,7 @@ function renderDetailToday(a){
   todays.forEach(c=>{
     const div = document.createElement('div');
     div.className='history-item';
-    div.innerHTML = `<span>${formatTime12(c.at)} — ${c.memo||''} ${'⭐'.repeat(c.stars)}</span><span>${c.points}pt <button class="del-completion" data-id="${c.id}">✕</button></span>`;
+    div.innerHTML = `<span>${formatTime12(c.at)} — ${c.memo||''} ${'⭐'.repeat(c.stars)}</span><span>${c.points}pt${spinBadgeHTML(c)} <button class="del-completion" data-id="${c.id}">✕</button></span>`;
     container.appendChild(div);
   });
   container.querySelectorAll('.del-completion').forEach(btn=>{
@@ -335,7 +487,7 @@ function renderDetailHistory(a){
   past.slice().sort((x,y)=>y.date.localeCompare(x.date)).forEach(c=>{
     const div = document.createElement('div');
     div.className='history-item';
-    div.innerHTML = `<span>${c.date} — ${c.memo||''}</span><span>${'⭐'.repeat(c.stars)} (${c.points}pt)</span>`;
+    div.innerHTML = `<span>${c.date} — ${c.memo||''}</span><span>${'⭐'.repeat(c.stars)} (${c.points}pt)${spinBadgeHTML(c)}</span>`;
     list.appendChild(div);
   });
 }
@@ -350,6 +502,9 @@ document.querySelectorAll('.star-opt').forEach(btn=>{
   });
 });
 
+// ---------- Complete Activity -> Spin -> Summary Flow ----------
+let pendingSpin = null; // { activityId, completionId, stars, taskCount }
+
 function completeActivity(id, stars){
   const a = state.activities.find(x=>x.id===id);
   if(!a) return;
@@ -360,10 +515,12 @@ function completeActivity(id, stars){
   const newMomentum = Math.min(100, oldMomentum+8);
   const momentumGained = newMomentum - oldMomentum;
 
-  a.completions.push({
+  const completion = {
     id: uid(), date: todayStr(), at, memo: a.memo || '',
-    stars, points: stars, xpGained, momentumGained
-  });
+    stars, points: stars, xpGained, momentumGained,
+    spin: { tier: 'miss', bonusPoints: 0, bonusXP: 0 }
+  };
+  a.completions.push(completion);
 
   state.momentum = newMomentum;
   state.lastActiveDate = todayStr();
@@ -373,12 +530,124 @@ function completeActivity(id, stars){
   saveState();
 
   document.getElementById('starPicker').classList.add('hidden');
-  openDetail(id);
+
+  pendingSpin = { activityId: id, completionId: completion.id, stars, taskCount: state.activities.length };
+
+  closeModal('detailModal');
+  openSpinFlow();
+}
+
+function openSpinFlow(){
+  openModal('spinModal');
+  const symbolEl = document.getElementById('spinSymbol');
+  const labelEl = document.getElementById('spinLabel');
+  const confirmBtn = document.getElementById('spinConfirmBtn');
+  const fxEl = document.getElementById('spinFx');
+
+  fxEl.innerHTML = '';
+  labelEl.textContent = '';
+  labelEl.className = 'spin-label';
+  confirmBtn.classList.add('hidden');
+  symbolEl.textContent = '🎰';
+  symbolEl.className = 'spin-symbol spinning';
+
+  const spinEmojis = ['🎰','⭐','💰','🌟','💎','✨'];
+  const shakeInterval = setInterval(()=>{
+    symbolEl.textContent = spinEmojis[Math.floor(Math.random()*spinEmojis.length)];
+  }, 90);
+
+  setTimeout(()=>{
+    clearInterval(shakeInterval);
+    const tier = pickSpinTier(state.momentum, pendingSpin.taskCount, pendingSpin.stars);
+    resolveSpinResult(tier);
+  }, 1200);
+}
+
+function resolveSpinResult(tier){
+  const a = state.activities.find(x=>x.id===pendingSpin.activityId);
+  const completion = a.completions.find(c=>c.id===pendingSpin.completionId);
+  const bonus = SPIN_BONUS[tier] || { points:0, xp:0 };
+  completion.spin = { tier, bonusPoints: bonus.points, bonusXP: bonus.xp };
+
+  recalcPoints();
+  recalcLevel();
+  saveState();
+
+  const symbolEl = document.getElementById('spinSymbol');
+  const labelEl = document.getElementById('spinLabel');
+  const confirmBtn = document.getElementById('spinConfirmBtn');
+  const info = SPIN_LABELS[tier];
+
+  symbolEl.textContent = info.emoji;
+  symbolEl.className = 'spin-symbol landed';
+  labelEl.textContent = info.text;
+  labelEl.classList.add(info.cls);
+  confirmBtn.classList.remove('hidden');
+
+  if(tier !== 'miss'){
+    launchFirework();
+  }
+}
+
+function launchFirework(){
+  const fx = document.getElementById('spinFx');
+  fx.innerHTML = '';
+  const colors = ['#ff6b6b','#ffd93d','#6bcb77','#4a6cf7','#e1bee7','#ff9f43'];
+  for(let i=0;i<18;i++){
+    const p = document.createElement('div');
+    p.className = 'fx-particle burst';
+    const angle = (Math.PI*2*i)/18 + Math.random()*0.3;
+    const dist = 60 + Math.random()*40;
+    p.style.setProperty('--dx', Math.cos(angle)*dist+'px');
+    p.style.setProperty('--dy', Math.sin(angle)*dist+'px');
+    p.style.background = colors[i % colors.length];
+    fx.appendChild(p);
+  }
+}
+
+document.getElementById('spinConfirmBtn').addEventListener('click', ()=>{
+  closeModal('spinModal');
+  openSummaryModal();
+});
+
+function openSummaryModal(){
+  const a = state.activities.find(x=>x.id===pendingSpin.activityId);
+  const completion = a.completions.find(c=>c.id===pendingSpin.completionId);
+
+  document.getElementById('summaryName').textContent = a.name;
+  document.getElementById('summaryMemo').textContent = completion.memo || '—';
+  document.getElementById('summaryStars').textContent = '⭐'.repeat(completion.stars);
+
+  document.getElementById('summaryBaseReward').textContent = `+${completion.points}pt · +${completion.xpGained}xp`;
+  document.getElementById('summaryMomentum').textContent = `⚡ Momentum +${completion.momentumGained}%`;
+
+  const spinEl = document.getElementById('summarySpinResult');
+  const info = SPIN_LABELS[completion.spin.tier];
+  if(completion.spin.tier === 'miss'){
+    spinEl.className = 'summary-detail miss';
+    spinEl.textContent = `${info.emoji} ${info.text}`;
+  } else {
+    spinEl.className = 'summary-detail win';
+    const parts = [];
+    if(completion.spin.bonusPoints>0) parts.push(`+${completion.spin.bonusPoints}pt`);
+    if(completion.spin.bonusXP>0) parts.push(`+${completion.spin.bonusXP}xp`);
+    spinEl.textContent = `${info.emoji} ${info.text} — ${parts.join(' ')}`;
+  }
+
+  openModal('summaryModal');
+}
+
+document.getElementById('summaryCloseBtn').addEventListener('click', ()=>{
+  closeModal('summaryModal');
+  const activityId = pendingSpin ? pendingSpin.activityId : currentDetailId;
+  pendingSpin = null;
+  if(activityId) openDetail(activityId);
   renderStats();
   renderUnscheduled();
   renderTimeline();
-}
+});
 
+// ---------- Delete Completion ----------
 function deleteCompletion(activityId, completionId){
   const a = state.activities.find(x=>x.id===activityId);
   if(!a) return;
@@ -431,7 +700,7 @@ function renderHistoryModal(){
   all.sort((x,y)=> (y.date+y.at).localeCompare(x.date+x.at)).forEach(c=>{
     const div = document.createElement('div');
     div.className='history-item';
-    div.innerHTML = `<span>${c.date} — ${c.name}${c.memo?' ('+c.memo+')':''}</span><span>${'⭐'.repeat(c.stars)} (${c.points}pt)</span>`;
+    div.innerHTML = `<span>${c.date} — ${c.name}${c.memo?' ('+c.memo+')':''}</span><span>${'⭐'.repeat(c.stars)} (${c.points}pt)${spinBadgeHTML(c)}</span>`;
     list.appendChild(div);
   });
 }
@@ -569,7 +838,6 @@ function renderRewardsModal(){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab==='week'));
   renderRewardStats();
 }
-
 
 // ---------- Rules Board ----------
 function renderRulesBoard(){
@@ -716,7 +984,6 @@ function renderWhatNowCard(pickNew){
   }, 80);
 }
 
-
 document.getElementById('whatNowBtn').addEventListener('click', ()=>{
   openModal('whatNowModal');
   renderWhatNowCard(true);
@@ -731,7 +998,7 @@ document.getElementById('doItBtn').addEventListener('click', ()=>{
 });
 
 // ---------- Init ----------
-applyMomentumDecay();
+applyDailyMomentumUpdate();
 recalcPoints();
 recalcLevel();
 renderAll();
@@ -739,7 +1006,6 @@ scrollToNow();
 
 setInterval(()=>{ updateNowLine(); }, 30000);
 
-// Refresh todo tags/overdue status at midnight-ish check every few minutes
 setInterval(()=>{
   renderTodoTags();
   renderTimeline();

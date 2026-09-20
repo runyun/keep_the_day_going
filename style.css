@@ -118,3 +118,143 @@ body { background:#f5f5f0; color:#333; }
   .stat-label { min-width:56px; font-size:12px; }
   .sticky-note { width:110px; }
 }
+
+/* ---------- Spin Modal ---------- */
+.spin-stage {
+  position: relative;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.spin-symbol {
+  font-size: 64px;
+  transition: transform 0.05s linear;
+}
+
+.spin-symbol.spinning {
+  animation: spinShake 0.15s infinite;
+}
+
+@keyframes spinShake {
+  0% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.05); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.spin-symbol.landed {
+  animation: spinLand 0.4s ease-out;
+}
+
+@keyframes spinLand {
+  0% { transform: scale(1.4); }
+  60% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+.spin-label {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  margin-top: 8px;
+  min-height: 24px;
+}
+
+.spin-label.tier-miss { color: #999; }
+.spin-label.tier-small { color: #43a047; }
+.spin-label.tier-medium-r { color: #1e88e5; }
+.spin-label.tier-medium-g { color: #8e24aa; }
+.spin-label.tier-large-r { color: #f57f17; }
+.spin-label.tier-large-g { color: #e53935; }
+
+/* Firework particles (pure CSS) */
+.spin-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.fx-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.fx-particle.burst {
+  animation: fxBurst 0.8s ease-out forwards;
+}
+
+@keyframes fxBurst {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.3);
+  }
+}
+
+/* ---------- Summary Modal ---------- */
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  font-size: 14px;
+  gap: 10px;
+}
+
+.summary-label {
+  flex-shrink: 0;
+  color: #888;
+  font-weight: 600;
+  min-width: 90px;
+}
+
+.summary-divider {
+  border: none;
+  border-top: 1px dashed #eee;
+  margin: 4px 0;
+}
+
+.summary-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+
+.summary-detail {
+  font-size: 14px;
+  background: #f7f7f7;
+  border-radius: 8px;
+  padding: 8px 10px;
+  line-height: 1.6;
+}
+
+.summary-detail.win {
+  background: #fff8e1;
+  color: #8a6d00;
+  font-weight: 600;
+}
+
+.summary-detail.miss {
+  background: #f7f7f7;
+  color: #999;
+}
+
+/* ---------- History spin badge ---------- */
+.spin-badge {
+  font-size: 12px;
+  color: #f57f17;
+  font-weight: 700;
+  margin-left: 4px;
+}

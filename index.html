@@ -210,6 +210,43 @@
   </div>
 </div>
 
+<!-- Spin Reward (NEW) -->
+<div id="spinModal" class="modal-overlay hidden" data-no-outside-close="true">
+  <div class="modal">
+    <div class="modal-header"><span>🎰 Bonus Spin</span></div>
+    <div class="modal-body">
+      <div class="spin-stage">
+        <div id="spinFx" class="spin-fx"></div>
+        <div id="spinSymbol" class="spin-symbol">🎰</div>
+      </div>
+      <div id="spinLabel" class="spin-label"></div>
+      <button id="spinConfirmBtn" class="btn-primary full-width hidden">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Completion Summary (NEW) -->
+<div id="summaryModal" class="modal-overlay hidden" data-no-outside-close="true">
+  <div class="modal">
+    <div class="modal-header"><span>✅ Activity Complete!</span></div>
+    <div class="modal-body">
+      <div class="summary-row"><span class="summary-label">📌 Activity</span><span id="summaryName"></span></div>
+      <div class="summary-row"><span class="summary-label">📝 Memo</span><span id="summaryMemo"></span></div>
+      <div class="summary-row"><span class="summary-label">⭐ Difficulty</span><span id="summaryStars"></span></div>
+      <hr class="summary-divider">
+      <div class="summary-section-title">🎁 Base Reward</div>
+      <div id="summaryBaseReward" class="summary-detail"></div>
+      <div id="summaryMomentum" class="summary-detail"></div>
+      <hr class="summary-divider">
+      <div class="summary-section-title">🎰 Spin Result</div>
+      <div id="summarySpinResult" class="summary-detail"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="summaryCloseBtn" class="btn-primary full-width">Done</button>
+    </div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>
