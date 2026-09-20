@@ -1,849 +1,480 @@
-let db;
-let currentDetail = null;
+const STORAGE_KEY = 'dailyQuestState';
+const HOUR_HEIGHT = 60;
+const PASTEL_COLORS = ['#fff59d','#ffccbc','#c8e6c9','#bbdefb','#e1bee7','#ffe0b2'];
 
-const request = indexedDB.open("StreakDB", 2);
+// ---------- State ----------
+function loadState(){
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if(saved){ try { return JSON.parse(saved); } catch(e){} }
+  return {
+    level:1, xp:0, xpToNext:70,
+    momentum:70, points:0,
+    lastActiveDate: todayStr(),
+    activities: [], rules: [], redemptions: []
+  };
+}
+let state = loadState();
+function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
-request.onupgradeneeded = e => {
-    db = e.target.result;
-    if (!db.objectStoreNames.contains("activities")) {
-        db.createObjectStore("activities", { keyPath: "id" });
-    }
-    if (!db.objectStoreNames.contains("rewards")) {
-        db.createObjectStore("rewards", { keyPath: "id" });
-    }
-    if (!db.objectStoreNames.contains("redeemHistory")) {
-        db.createObjectStore("redeemHistory", { keyPath: "id" });
-    }
-};
+// ---------- Helpers ----------
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function timeToMinutes(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 
-request.onsuccess = e => {
-    db = e.target.result;
-    render();
-};
+function isDoneToday(a){ return a.completions.some(c=>c.date===todayStr()); }
 
-request.onerror = e => {
-    console.error("DB Error:", e.target.error);
-    alert("資料庫開啟失敗，請重新整理頁面");
-};
-
-/* ===================== 小工具函式 ===================== */
-
-function formatDate(d) {
-    let y = d.getFullYear();
-    let m = String(d.getMonth() + 1).padStart(2, "0");
-    let day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
+function getStreak(a){
+  const set = new Set(a.completions.map(c=>c.date));
+  let streak=0;
+  let d = new Date();
+  if(!set.has(todayStr())) d.setDate(d.getDate()-1);
+  while(true){
+    const ds = d.toISOString().slice(0,10);
+    if(set.has(ds)){ streak++; d.setDate(d.getDate()-1); } else break;
+  }
+  return streak;
 }
 
-function todayString() {
-    return formatDate(new Date());
+function applyMomentumDecay(){
+  const last = new Date(state.lastActiveDate);
+  const today = new Date(todayStr());
+  const diffDays = Math.round((today-last)/86400000);
+  if(diffDays>0){
+    state.momentum = Math.max(0, state.momentum - diffDays*15);
+    state.lastActiveDate = todayStr();
+    saveState();
+  }
 }
 
-function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-        let j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
+function recalcPoints(){
+  let earned = 0;
+  state.activities.forEach(a=>a.completions.forEach(c=>earned += c.points));
+  const spent = state.redemptions.reduce((s,r)=>s+r.cost, 0);
+  state.points = earned - spent;
 }
 
-function diffEmoji(d) {
-    return { easy: "😌", medium: "💪", hard: "😖" }[d] || "";
+function recalcLevel(){
+  let totalXP = 0;
+  state.activities.forEach(a=>a.completions.forEach(c=>{
+    totalXP += (c.xpGained !== undefined) ? c.xpGained : c.stars*10;
+  }));
+  let level = 1, xpToNext = 70, remaining = totalXP;
+  while(remaining >= xpToNext){
+    remaining -= xpToNext;
+    level++;
+    xpToNext = Math.round(xpToNext*1.2);
+  }
+  state.level = level;
+  state.xp = remaining;
+  state.xpToNext = xpToNext;
 }
 
-/* ===================== 資料存取：activities ===================== */
-
-function getActivities() {
-    return new Promise(resolve => {
-        let tx = db.transaction("activities", "readonly");
-        let store = tx.objectStore("activities");
-        let req = store.getAll();
-        req.onsuccess = () => resolve(req.result);
-    });
-}
-
-function saveActivity(data) {
-    let tx = db.transaction("activities", "readwrite");
-    tx.objectStore("activities").put(data);
-}
-
-function deleteActivityDB(id) {
-    let tx = db.transaction("activities", "readwrite");
-    tx.objectStore("activities").delete(id);
-}
-
-/* ===================== 資料存取：rewards ===================== */
-
-function getRewards() {
-    return new Promise(resolve => {
-        let tx = db.transaction("rewards", "readonly");
-        let req = tx.objectStore("rewards").getAll();
-        req.onsuccess = () => resolve(req.result);
-    });
-}
-
-function saveReward(data) {
-    let tx = db.transaction("rewards", "readwrite");
-    tx.objectStore("rewards").put(data);
-}
-
-function deleteRewardDB(id) {
-    let tx = db.transaction("rewards", "readwrite");
-    tx.objectStore("rewards").delete(id);
-}
-
-/* ===================== 資料存取：redeemHistory ===================== */
-
-function getRedeemHistory() {
-    return new Promise(resolve => {
-        let tx = db.transaction("redeemHistory", "readonly");
-        let req = tx.objectStore("redeemHistory").getAll();
-        req.onsuccess = () => resolve(req.result);
-    });
-}
-
-function saveRedeem(data) {
-    let tx = db.transaction("redeemHistory", "readwrite");
-    tx.objectStore("redeemHistory").put(data);
-}
-
-/* ===================== Streak 計算 ===================== */
-
-function getStreak(records) {
-    if (records.length === 0) return 0;
-
-    let dates = records.map(r => r.date).sort().reverse();
-    let streak = 0;
-    let check = new Date();
-    check.setHours(0, 0, 0, 0);
-
-    for (let date of dates) {
-        let d = new Date(date);
-        d.setHours(0, 0, 0, 0);
-        let diff = (check - d) / (1000 * 60 * 60 * 24);
-
-        if (diff === 0 || diff === 1) {
-            streak++;
-            check = d;
-        } else {
-            break;
-        }
-    }
-
-    return streak;
-}
-
-function getBestStreak(records) {
-    if (records.length === 0) return 0;
-
-    let dates = records.map(r => r.date).sort();
-    let best = 1;
-    let current = 1;
-
-    for (let i = 1; i < dates.length; i++) {
-        let prev = new Date(dates[i - 1]);
-        let now = new Date(dates[i]);
-        let diff = (now - prev) / (1000 * 60 * 60 * 24);
-
-        if (diff === 1) {
-            current++;
-        } else {
-            current = 1;
-        }
-
-        if (current > best) best = current;
-    }
-
-    return best;
-}
-
-/* ===================== 成長值 / 等級 ===================== */
-
-async function computeTotalGrowth() {
-    let list = await getActivities();
-    let total = 0;
-    list.forEach(item => {
-        item.records.forEach(r => {
-            total += (r.bonus ? 2 : 1);
-        });
-    });
-    return total;
-}
-
-function getLevelInfo(growth) {
-    let level = 1;
-    let required = 50;
-    let cumulative = 0;
-
-    while (growth >= cumulative + required) {
-        cumulative += required;
-        level++;
-        required = 50 + (level - 1) * 20;
-    }
-
-    return {
-        level,
-        cumulative,
-        required,
-        progress: growth - cumulative
-    };
-}
-
-/* ===================== 動力值（Momentum） ===================== */
-
-async function getMomentum() {
-    let list = await getActivities();
-    let momentum = 50;
-
-    let base = new Date();
-    base.setHours(0, 0, 0, 0);
-
-    for (let i = 30; i >= 1; i--) {
-        let d = new Date(base);
-        d.setDate(d.getDate() - i);
-        let dateStr = formatDate(d);
-
-        let anyDone = list.some(item =>
-            item.records.some(r => r.date === dateStr)
-        );
-
-        momentum += anyDone ? 8 : -8;
-        momentum = Math.max(0, Math.min(100, momentum));
-    }
-
-    let todayStr = todayString();
-    let todayDone = list.some(item =>
-        item.records.some(r => r.date === todayStr)
-    );
-
-    if (todayDone) {
-        momentum = Math.min(100, momentum + 8);
-    }
-
-    return momentum;
-}
-
-/* ===================== 每週點數 / 歷史累計 ===================== */
-
-function getWeekStart(date) {
-    let d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - d.getDay());
-    return d;
-}
-
-async function getWeeklyPoints() {
-    let list = await getActivities();
-    let redemptions = await getRedeemHistory();
-    let weekStart = getWeekStart(new Date());
-
-    let earned = 0;
-    list.forEach(item => {
-        item.records.forEach(r => {
-            let d = new Date(r.date);
-            if (d >= weekStart) earned += (r.points || 0);
-        });
-    });
-
-    let spent = 0;
-    redemptions.forEach(r => {
-        let d = new Date(r.date);
-        if (d >= weekStart) spent += r.cost;
-    });
-
-    return Math.max(0, earned - spent);
-}
-
-async function getLifetimeStats() {
-    let list = await getActivities();
-    let redemptions = await getRedeemHistory();
-
-    let earned = 0;
-    list.forEach(item => {
-        item.records.forEach(r => earned += (r.points || 0));
-    });
-
-    let spent = redemptions.reduce((s, r) => s + r.cost, 0);
-
-    return { earned, spent };
-}
-
-/* ===================== Header 統計更新 ===================== */
-
-async function updateHeaderStats() {
-    let growth = await computeTotalGrowth();
-    let info = getLevelInfo(growth);
-
-    document.getElementById("levelDisplay").innerText =
-        `🌱 Lv.${info.level} · ${growth}`;
-
-    let weekly = await getWeeklyPoints();
-    let pointsEl = document.getElementById("pointsDisplay");
-    pointsEl.innerText = `🎁 ${weekly} pt`;
-
-    pointsEl.classList.remove("points-warn", "points-danger");
-    let day = new Date().getDay();
-    if (day === 6) {
-        pointsEl.classList.add("points-danger");
-    } else if (day === 5) {
-        pointsEl.classList.add("points-warn");
-    }
-
-    let momentum = await getMomentum();
-    document.getElementById("momentumBar").style.width = momentum + "%";
-}
-
-/* ===================== 背景色（今日完成度） ===================== */
-
-async function updateBackground() {
-    let list = await getActivities();
-    document.body.classList.remove("progress-low", "progress-mid", "progress-high");
-
-    if (list.length === 0) return;
-
-    let today = todayString();
-    let doneCount = list.filter(item =>
-        item.records.some(r => r.date === today)
-    ).length;
-
-    let ratio = doneCount / list.length;
-
-    if (ratio >= 0.8) {
-        document.body.classList.add("progress-high");
-    } else if (ratio >= 0.4) {
-        document.body.classList.add("progress-mid");
-    } else {
-        document.body.classList.add("progress-low");
-    }
-}
-
-/* ===================== 主渲染 ===================== */
-
-async function render() {
-
-    let list = await getActivities();
-    let today = todayString();
-
-    let unfinished = list.filter(item => {
-        return !item.records.some(r => r.date === today);
-    });
-
-    let finished = list.filter(item => {
-        return item.records.some(r => r.date === today);
-    });
-
-    shuffle(unfinished);
-    shuffle(finished);
-
-    list = [...unfinished, ...finished];
-
-    activityContainer.innerHTML = "";
-
-    list.forEach(item => {
-
-        let done = item.records.some(r => r.date === today);
-
-        let div = document.createElement("div");
-        div.className = "activity";
-
-        div.innerHTML = `
-<div class="circle ${done ? "complete" : ""}">
-${getStreak(item.records)}
-</div>
-<div class="difficulty-picker hidden">
-    <button data-diff="easy" title="簡單">😌</button>
-    <button data-diff="medium" title="中等">💪</button>
-    <button data-diff="hard" title="困難">😖</button>
-</div>
-${done ? '<div class="done-icon">✓</div>' : ""}
-<div class="activity-name">${item.name}</div>
-<input class="memo" value="${item.memo || ""}" placeholder="memo">
-`;
-
-        let circle = div.querySelector(".circle");
-        let picker = div.querySelector(".difficulty-picker");
-
-        circle.onclick = (e) => {
-            e.stopPropagation();
-            if (done) return;
-            document.querySelectorAll(".difficulty-picker").forEach(p => p.classList.add("hidden"));
-            picker.classList.remove("hidden");
-        };
-
-        picker.querySelectorAll("button").forEach(btn => {
-            btn.onclick = async (e) => {
-                e.stopPropagation();
-                picker.classList.add("hidden");
-                await completeActivity(item, btn.dataset.diff, div, circle);
-            };
-        });
-
-        div.querySelector(".memo").onchange = e => {
-            item.memo = e.target.value;
-
-            let rec = item.records.find(r => r.date === today);
-            if (rec) rec.memo = e.target.value;
-
-            saveActivity(item);
-        };
-
-        div.querySelector(".activity-name").onclick = () => {
-            openDetail(item);
-        };
-
-        activityContainer.appendChild(div);
-    });
-
-    updateBackground();
-    updateHeaderStats();
-}
-
-/* ===================== 打卡完成邏輯 ===================== */
-async function completeActivity(item, diff, div, circle) {
-
-    const pointsMap = { easy: 1, medium: 2, hard: 3 };
-    const chanceMap = { easy: .10, medium: .20, hard: .30 };
-
-    let beforeGrowth = await computeTotalGrowth();
-    let momentum = await getMomentum();
-
-    let chance = chanceMap[diff] + (momentum >= 80 ? 0.10 : 0);
-    let bonus = Math.random() < chance;
-
-    let basePoints = pointsMap[diff];
-    let points = bonus ? basePoints * 2 : basePoints;
-
-    let today = todayString();
-
-    item.records.push({
-        date: today,
-        memo: item.memo || "",
-        difficulty: diff,
-        points: points,
-        bonus: bonus
-    });
-
-    saveActivity(item);
-
-    let growthGain = bonus ? 2 : 1;
-    let afterGrowth = beforeGrowth + growthGain;
-
-    circle.classList.add("animate");
-    createParticles(circle);
-
-    if (bonus) {
-        showBonusText(div);
-    }
-
-    let beforeLevel = getLevelInfo(beforeGrowth).level;
-    let afterLevel = getLevelInfo(afterGrowth).level;
-    let beforeMilestone = Math.floor(beforeGrowth / 100);
-    let afterMilestone = Math.floor(afterGrowth / 100);
-
-    setTimeout(() => {
-        if (afterLevel > beforeLevel) {
-            showLevelUpCelebration(afterLevel);
-        } else if (afterMilestone > beforeMilestone) {
-            showMilestoneCelebration(afterGrowth);
-        }
-    }, 750);
-
-    // 不呼叫 render()，改為原地更新這張卡片，避免位置洗牌
-    setTimeout(() => {
-        circle.classList.add("complete");
-        circle.textContent = getStreak(item.records);
-        circle.onclick = null; // 已完成，不可再點擊
-
-        if (!div.querySelector(".done-icon")) {
-            let doneIcon = document.createElement("div");
-            doneIcon.className = "done-icon";
-            doneIcon.textContent = "✓";
-            div.insertBefore(doneIcon, div.querySelector(".activity-name"));
-        }
-
-        updateBackground();
-        updateHeaderStats();
-    }, 700);
-}
-/* ===================== Bonus / 慶祝動畫 ===================== */
-
-function showBonusText(div) {
-    let el = document.createElement("div");
-    el.className = "bonus-text";
-    el.innerText = "✨ Bonus x2!";
-    div.appendChild(el);
-    setTimeout(() => el.remove(), 1200);
-}
-
-function showLevelUpCelebration(level) {
-    let overlay = document.createElement("div");
-    overlay.className = "celebration-overlay";
-    overlay.innerHTML = `<div class="celebration-box">🌟<br>Level Up!<br>Lv.${level}</div>`;
-    document.body.appendChild(overlay);
-    createConfetti();
-    setTimeout(() => overlay.remove(), 2200);
-}
-
-function showMilestoneCelebration(growth) {
-    let overlay = document.createElement("div");
-    overlay.className = "celebration-overlay";
-    overlay.innerHTML = `<div class="celebration-box">🎉<br>Milestone!<br>${growth} Growth</div>`;
-    document.body.appendChild(overlay);
-    createConfetti();
-    setTimeout(() => overlay.remove(), 2200);
-}
-
-function createConfetti() {
-    let icons = ["🎉", "✨", "🌟", "🎊"];
-
-    for (let i = 0; i < 30; i++) {
-        let p = document.createElement("div");
-        p.className = "particle";
-        p.innerText = icons[Math.floor(Math.random() * icons.length)];
-        p.style.left = window.innerWidth / 2 + "px";
-        p.style.top = window.innerHeight / 2 + "px";
-        p.style.setProperty("--x", (Math.random() - 0.5) * 600 + "px");
-        p.style.setProperty("--y", (Math.random() - 0.5) * 600 + "px");
-        document.body.appendChild(p);
-        setTimeout(() => p.remove(), 1500);
-    }
-}
-
-function createParticles(element) {
-    let rect = element.getBoundingClientRect();
-    let icons = ["⭐", "✨", "🎉", "🌸"];
-
-    for (let i = 0; i < 15; i++) {
-        let p = document.createElement("div");
-        p.className = "particle";
-        p.innerText = icons[Math.floor(Math.random() * icons.length)];
-        p.style.left = rect.left + rect.width / 2 + window.scrollX + "px";
-        p.style.top = rect.top + rect.height / 2 + window.scrollY + "px";
-        p.style.setProperty("--x", (Math.random() - 0.5) * 200 + "px");
-        p.style.setProperty("--y", (Math.random() - 0.5) * 200 + "px");
-        document.body.appendChild(p);
-        setTimeout(() => p.remove(), 1000);
-    }
-}
-
-/* ===================== 新增活動 ===================== */
-
-addBtn.onclick = () => {
-    modal.classList.remove("hidden");
-};
-
-document.addEventListener("click", () => {
-    document.querySelectorAll(".difficulty-picker").forEach(p => p.classList.add("hidden"));
+// ---------- Modal generic ----------
+function openModal(id){ document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+document.querySelectorAll('[data-close]').forEach(btn=>{
+  btn.addEventListener('click', ()=>closeModal(btn.dataset.close));
+});
+document.querySelectorAll('.modal-overlay').forEach(overlay=>{
+  overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.classList.add('hidden'); });
 });
 
-cancelBtn.onclick = () => {
-    modal.classList.add("hidden");
-};
+// ---------- Header menu ----------
+document.getElementById('menuBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.getElementById('menuDropdown').classList.toggle('hidden');
+});
+document.getElementById('detailMoreBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.getElementById('detailMoreMenu').classList.toggle('hidden');
+});
+document.addEventListener('click', ()=>{
+  document.getElementById('menuDropdown').classList.add('hidden');
+  document.getElementById('detailMoreMenu').classList.add('hidden');
+});
+document.querySelectorAll('#menuDropdown button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const action = btn.dataset.action;
+    if(action==='add') openModal('addModal');
+    if(action==='history'){ renderHistoryModal(); openModal('historyModal'); }
+    if(action==='rewards'){ renderRewardsModal(); openModal('rewardsModal'); }
+    if(action==='rules'){ renderRulesBoard(); openModal('rulesModal'); }
+    if(action==='reset'){
+      if(confirm('This will erase ALL data (activities, history, points, rules). Are you sure?')){
+        localStorage.removeItem(STORAGE_KEY);
+        location.reload();
+      }
+    }
+  });
+});
+document.getElementById('rulesTip').addEventListener('click', ()=>{
+  renderRulesBoard();
+  openModal('rulesModal');
+});
 
-createBtn.onclick = () => {
-
-    let name = activityName.value.trim();
-
-    if (!name) return;
-
-    let newItem = {
-        id: Date.now().toString(),
-        name: name,
-        memo: "",
-        records: []
-    };
-
-    saveActivity(newItem);
-    activityName.value = "";
-    modal.classList.add("hidden");
-    render();
-};
-
-/* ===================== 詳情 Modal ===================== */
-
-function openDetail(item) {
-    currentDetail = item;
-
-    let best = getBestStreak(item.records);
-
-    detailTitle.innerHTML = `
-        <span>${item.name}</span>
-        <span class="best-streak">🔥 ${best} days</span>
-    `;
-
-    let sorted = [...item.records].sort((a, b) => b.date.localeCompare(a.date));
-
-    historyList.innerHTML = sorted.map(r => `
-        <div class="history-item">
-            <strong>${r.date}</strong>
-            ${r.difficulty ? diffEmoji(r.difficulty) : ""}
-            ${r.points ? "+" + r.points + "pt" : ""}
-            ${r.bonus ? "✨" : ""}
-            <br>
-            <span style="color:#777;font-size:13px">${r.memo || ""}</span>
-        </div>
-    `).join("") || "<p>No records yet</p>";
-
-    detailModal.classList.remove("hidden");
+// ---------- Rendering ----------
+function renderStats(){
+  document.getElementById('levelNum').textContent = state.level;
+  document.getElementById('xpFill').style.width = Math.min(100, state.xp/state.xpToNext*100)+'%';
+  document.getElementById('xpText').textContent = `${state.xp}/${state.xpToNext}`;
+  document.getElementById('momentumFill').style.width = state.momentum+'%';
+  document.getElementById('momentumText').textContent = state.momentum+'%';
+  document.getElementById('pointsText').textContent = state.points+'pt';
 }
 
-deleteTodayBtn.onclick = () => {
-    if (!currentDetail) return;
-    if (!confirm("確定要刪除今天的紀錄嗎？")) return;
+let ruleTipIndex = 0;
+function renderRulesTip(){
+  const el = document.getElementById('rulesTipText');
+  if(state.rules.length===0){ el.textContent = 'No rules yet — tap to add one!'; return; }
+  ruleTipIndex = ruleTipIndex % state.rules.length;
+  el.textContent = '📌 ' + state.rules[ruleTipIndex].text;
+}
+setInterval(()=>{
+  if(state.rules.length>0){
+    ruleTipIndex = (ruleTipIndex+1) % state.rules.length;
+    renderRulesTip();
+  }
+}, 4000);
 
-    let today = todayString();
-    currentDetail.records = currentDetail.records.filter(r => r.date !== today);
-    saveActivity(currentDetail);
-
-    detailModal.classList.add("hidden");
-    render();
-};
-
-deleteActivityBtn.onclick = () => {
-    if (!currentDetail) return;
-    if (!confirm("確定要刪除這個活動嗎？此動作無法復原")) return;
-
-    deleteActivityDB(currentDetail.id);
-    detailModal.classList.add("hidden");
-    render();
-};
-
-closeDetailBtn.onclick = () => {
-    detailModal.classList.add("hidden");
-    currentDetail = null;
-};
-
-/* ===================== What Now（隨機選擇） ===================== */
-
-randomBtn.onclick = () => {
-    randomModal.classList.remove("hidden");
-    randomName.classList.remove("hidden");
-    randomName.classList.remove("random-winner");
-    randomName.innerText = "Ready";
-    randomResult.classList.add("hidden");
-    randomResult.innerText = "";
-};
-
-spinBtn.onclick = async () => {
-    let list = await getActivities();
-    let today = todayString();
-
-    let unfinished = list.filter(item => !item.records.some(r => r.date === today));
-
-    if (unfinished.length === 0) {
-        randomName.innerText = "🎉 All done today!";
-        return;
-    }
-
-    let names = unfinished.map(i => i.name);
-    let spins = 15;
-    let idx = 0;
-
-    randomName.classList.remove("random-winner");
-
-    let interval = setInterval(() => {
-        randomName.innerText = names[idx % names.length];
-        idx++;
-        spins--;
-
-        if (spins <= 0) {
-            clearInterval(interval);
-            let winner = names[Math.floor(Math.random() * names.length)];
-            randomName.innerText = winner;
-            randomName.classList.add("random-winner");
-        }
-    }, 100);
-};
-
-closeRandomBtn.onclick = () => {
-    randomModal.classList.add("hidden");
-};
-
-/* ===================== History Heatmap ===================== */
-
-historyBtn.onclick = async () => {
-    historyModal.classList.remove("hidden");
-    await renderHeatmap();
-};
-
-closeHistoryBtn.onclick = () => {
-    historyModal.classList.add("hidden");
-};
-
-async function renderHeatmap() {
-    let list = await getActivities();
-    let countByDate = {};
-
-    list.forEach(item => item.records.forEach(r => {
-        countByDate[r.date] = (countByDate[r.date] || 0) + 1;
-    }));
-
-    let today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let days = [];
-    for (let i = 364; i >= 0; i--) {
-        let d = new Date(today);
-        d.setDate(d.getDate() - i);
-        days.push(d);
-    }
-
-    let startPad = days[0].getDay();
-    for (let i = 0; i < startPad; i++) {
-        days.unshift(null);
-    }
-
-    let weeks = [];
-    for (let i = 0; i < days.length; i += 7) {
-        weeks.push(days.slice(i, i + 7));
-    }
-
-    let monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    let monthHtml = '<div class="month-row">';
-    let lastMonth = -1;
-
-    weeks.forEach(week => {
-        let firstValidDay = week.find(d => d !== null);
-        if (firstValidDay && firstValidDay.getMonth() !== lastMonth && firstValidDay.getDate() <= 7) {
-            monthHtml += `<div class="month">${monthNames[firstValidDay.getMonth()]}</div>`;
-            lastMonth = firstValidDay.getMonth();
-        } else {
-            monthHtml += '<div class="month"></div>';
-        }
-    });
-    monthHtml += "</div>";
-
-    function heatTier(count) {
-        if (!count) return "";
-        if (count <= 3) return "heat-1";
-        if (count <= 6) return "heat-2";
-        return "heat-3";
-    }
-
-    let heatmapHtml = '<div class="heatmap">';
-    weeks.forEach(week => {
-        heatmapHtml += '<div class="week">';
-        week.forEach(day => {
-            if (!day) {
-                heatmapHtml += '<div class="heat-cell" style="background:transparent"></div>';
-            } else {
-                let dateStr = formatDate(day);
-                let count = countByDate[dateStr] || 0;
-                let tier = heatTier(count);
-                heatmapHtml += `<div class="heat-cell ${tier}" title="${dateStr}${count ? " · " + count + "次" : ""}"></div>`;
-            }
-        });
-        heatmapHtml += "</div>";
-    });
-    heatmapHtml += "</div>";
-
-    let container = document.getElementById("heatmapContainer");
-    container.innerHTML = `
-        <div class="heatmap-title">Past Year Activity</div>
-        <div class="heatmap-wrapper">
-            <div class="week-label-area">
-                <div class="week-labels">
-                    <div>Sun</div><div></div><div>Tue</div><div></div><div>Thu</div><div></div><div>Sat</div>
-                </div>
-            </div>
-            <div class="heatmap-scroll">
-                <div class="heatmap-inner">
-                    ${monthHtml}
-                    ${heatmapHtml}
-                </div>
-            </div>
-        </div>
-    `;
-
-    // 滾動到最右邊（最近日期）
-    let scrollEl = container.querySelector(".heatmap-scroll");
-    requestAnimationFrame(() => {
-        scrollEl.scrollLeft = scrollEl.scrollWidth;
-    });
+function renderUnscheduled(){
+  const container = document.getElementById('unscheduledList');
+  container.innerHTML='';
+  const items = state.activities.filter(a=>!a.time);
+  if(items.length===0){
+    container.innerHTML = '<div style="color:#aaa;font-size:13px;">Nothing unscheduled 🎉</div>';
+    return;
+  }
+  items.forEach(a=>{
+    const div = document.createElement('div');
+    div.className = 'unscheduled-item' + (isDoneToday(a) ? ' done':'');
+    div.innerHTML = `<span>${a.memo ? a.name+' — '+a.memo : a.name}</span>` + (isDoneToday(a) ? '<span>✓</span>' : '');
+    div.addEventListener('click', ()=>openDetail(a.id));
+    container.appendChild(div);
+  });
 }
 
-/* ===================== 獎賞商店 ===================== */
+function renderTimeline(){
+  const timeline = document.getElementById('timeline');
+  timeline.innerHTML='';
+  for(let h=0; h<24; h++){
+    const row = document.createElement('div');
+    row.className='hour-row';
+    row.style.top = (h*HOUR_HEIGHT)+'px';
+    row.innerHTML = `<div class="hour-label">${String(h).padStart(2,'0')}:00</div><div class="hour-line"></div>`;
+    timeline.appendChild(row);
+  }
+  const nowLine = document.createElement('div');
+  nowLine.id='nowLine';
+  nowLine.className='now-line';
+  timeline.appendChild(nowLine);
 
-rewardBtn.onclick = async () => {
-    await renderRewards();
-    rewardModal.classList.remove("hidden");
-};
+  const nowMinutes = new Date().getHours()*60+new Date().getMinutes();
 
-closeRewardBtn.onclick = () => {
-    rewardModal.classList.add("hidden");
-};
+  state.activities.filter(a=>a.time).forEach(a=>{
+    const top = (timeToMinutes(a.time)/60)*HOUR_HEIGHT;
+    const height = Math.max(28, (a.duration/60)*HOUR_HEIGHT);
+    const done = isDoneToday(a);
+    const overdue = !done && (timeToMinutes(a.time)+a.duration) < nowMinutes;
+    const card = document.createElement('div');
+    card.className = 'activity-card' + (done?' done':'') + (overdue?' overdue':'');
+    card.style.top = top+'px';
+    card.style.height = height+'px';
+    const streak = getStreak(a);
+    card.innerHTML = `<span class="name">${done?'✓ ':''}${a.name}</span>${a.memo?' — '+a.memo:''}${streak>0?`<span class="streak-badge">🔥${streak}</span>`:''}`;
+    card.addEventListener('click', ()=>openDetail(a.id));
+    timeline.appendChild(card);
+  });
 
-addRewardBtn.onclick = async () => {
-    let name = rewardName.value.trim();
-    let cost = parseInt(rewardCost.value);
-
-    if (!name || !cost || cost <= 0) return;
-
-    let reward = {
-        id: Date.now().toString(),
-        name: name,
-        cost: cost
-    };
-
-    saveReward(reward);
-    rewardName.value = "";
-    rewardCost.value = "";
-    await renderRewards();
-};
-
-async function renderRewards() {
-    let rewards = await getRewards();
-    let weekly = await getWeeklyPoints();
-    let lifetime = await getLifetimeStats();
-
-    document.getElementById("rewardWeeklyInfo").innerHTML =
-        `本週剩餘點數：<strong>${weekly} pt</strong>`;
-
-    let listEl = document.getElementById("rewardList");
-
-    if (rewards.length === 0) {
-        listEl.innerHTML = '<p style="color:#999">還沒有獎賞，新增一個吧！</p>';
-    } else {
-        listEl.innerHTML = rewards.map(r => `
-            <div class="reward-item">
-                <span>${r.name} — ${r.cost}pt</span>
-                <button class="redeemBtn" data-id="${r.id}" data-cost="${r.cost}" data-name="${r.name}" ${weekly < r.cost ? "disabled" : ""}>兌換</button>
-                <button class="deleteRewardBtn" data-id="${r.id}">刪除</button>
-            </div>
-        `).join("");
-
-        listEl.querySelectorAll(".redeemBtn").forEach(btn => {
-            btn.onclick = async () => {
-                let cost = parseInt(btn.dataset.cost);
-                let currentWeekly = await getWeeklyPoints();
-
-                if (currentWeekly < cost) {
-                    alert("點數不足");
-                    return;
-                }
-
-                if (!confirm(`確定要兌換「${btn.dataset.name}」嗎？(-${cost}pt)`)) return;
-
-                saveRedeem({
-                    id: Date.now().toString(),
-                    name: btn.dataset.name,
-                    cost: cost,
-                    date: todayString()
-                });
-
-                await renderRewards();
-                updateHeaderStats();
-            };
-        });
-
-        listEl.querySelectorAll(".deleteRewardBtn").forEach(btn => {
-            btn.onclick = async () => {
-                if (!confirm("確定要刪除這個獎賞項目嗎？")) return;
-                deleteRewardDB(btn.dataset.id);
-                await renderRewards();
-            };
-        });
-    }
-
-    document.getElementById("rewardLifetimeStats").innerHTML =
-        `歷史累積：賺取 ${lifetime.earned}pt · 花費 ${lifetime.spent}pt`;
+  updateNowLine();
 }
+
+function updateNowLine(){
+  const nowLine = document.getElementById('nowLine');
+  if(!nowLine) return;
+  const now = new Date();
+  const minutes = now.getHours()*60+now.getMinutes();
+  nowLine.style.top = (minutes/60*HOUR_HEIGHT)+'px';
+  nowLine.setAttribute('data-time', now.toTimeString().slice(0,5));
+}
+
+function scrollToNow(){
+  const container = document.getElementById('timelineContainer');
+  const minutes = new Date().getHours()*60+new Date().getMinutes();
+  const top = minutes/60*HOUR_HEIGHT;
+  container.scrollTop = Math.max(0, top - container.clientHeight/2);
+}
+
+function renderAll(){
+  renderStats();
+  renderRulesTip();
+  renderUnscheduled();
+  renderTimeline();
+}
+
+// ---------- Add Activity ----------
+document.getElementById('addConfirmBtn').addEventListener('click', ()=>{
+  const name = document.getElementById('addName').value.trim();
+  if(!name){ alert('Please enter a name'); return; }
+  const memo = document.getElementById('addMemo').value.trim();
+  const time = document.getElementById('addTime').value || null;
+  const duration = Number(document.getElementById('addDuration').value) || 30;
+  state.activities.push({ id: uid(), name, memo, time, duration, completions: [] });
+  saveState();
+  document.getElementById('addName').value='';
+  document.getElementById('addMemo').value='';
+  document.getElementById('addTime').value='';
+  document.getElementById('addDuration').value=30;
+  closeModal('addModal');
+  renderAll();
+});
+
+// ---------- Detail Modal ----------
+let currentDetailId = null;
+
+function openDetail(id){
+  currentDetailId = id;
+  const a = state.activities.find(x=>x.id===id);
+  if(!a) return;
+  document.getElementById('detailName').textContent = a.name + (a.memo ? ' — '+a.memo : '');
+  document.getElementById('detailStreak').textContent = `🔥 ${getStreak(a)} day streak`;
+  document.getElementById('editTime').value = a.time || '';
+  document.getElementById('editDuration').value = a.duration;
+  document.getElementById('starPicker').classList.add('hidden');
+
+  const completeBtn = document.getElementById('completeBtn');
+  if(isDoneToday(a)){
+    completeBtn.textContent = '✓ Completed Today';
+    completeBtn.disabled = true;
+  } else {
+    completeBtn.textContent = '✓ Mark Complete';
+    completeBtn.disabled = false;
+  }
+
+  renderDetailHistory(a);
+  document.getElementById('detailMoreMenu').classList.add('hidden');
+  openModal('detailModal');
+}
+
+function renderDetailHistory(a){
+  const list = document.getElementById('detailHistory');
+  list.innerHTML='';
+  if(a.completions.length===0){
+    list.innerHTML = '<div style="color:#aaa;font-size:13px;">No history yet</div>';
+    return;
+  }
+  a.completions.slice().sort((x,y)=>y.date.localeCompare(x.date)).forEach(c=>{
+    const div = document.createElement('div');
+    div.className='history-item';
+    div.innerHTML = `<span>${c.date}</span><span>${'⭐'.repeat(c.stars)} (+${c.points}pt)</span>`;
+    list.appendChild(div);
+  });
+}
+
+document.getElementById('completeBtn').addEventListener('click', ()=>{
+  document.getElementById('starPicker').classList.remove('hidden');
+});
+
+document.querySelectorAll('.star-opt').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    completeActivity(currentDetailId, Number(btn.dataset.stars));
+  });
+});
+
+function completeActivity(id, stars){
+  const a = state.activities.find(x=>x.id===id);
+  if(!a) return;
+  const xpGained = stars*10;
+  const oldMomentum = state.momentum;
+  const newMomentum = Math.min(100, oldMomentum+8);
+  const momentumGained = newMomentum - oldMomentum;
+
+  a.completions.push({
+    date: todayStr(), stars, points: stars,
+    xpGained, momentumGained
+  });
+
+  state.momentum = newMomentum;
+  state.lastActiveDate = todayStr();
+
+  recalcPoints();
+  recalcLevel();
+
+  saveState();
+  closeModal('detailModal');
+  renderAll();
+}
+
+document.getElementById('deleteTodayBtn').addEventListener('click', ()=>{
+  const a = state.activities.find(x=>x.id===currentDetailId);
+  if(!a) return;
+
+  const todaysCompletions = a.completions.filter(c=>c.date===todayStr());
+  todaysCompletions.forEach(c=>{
+    state.momentum = Math.max(0, state.momentum - (c.momentumGained || 0));
+  });
+
+  a.completions = a.completions.filter(c=>c.date!==todayStr());
+
+  recalcPoints();
+  recalcLevel();
+
+  saveState();
+  closeModal('detailModal');
+  renderAll();
+});
+
+document.getElementById('deleteActivityBtn').addEventListener('click', ()=>{
+  if(!confirm('Delete this activity permanently?')) return;
+
+  const a = state.activities.find(x=>x.id===currentDetailId);
+  if(a){
+    a.completions.filter(c=>c.date===todayStr()).forEach(c=>{
+      state.momentum = Math.max(0, state.momentum - (c.momentumGained || 0));
+    });
+  }
+
+  state.activities = state.activities.filter(x=>x.id!==currentDetailId);
+
+  recalcPoints();
+  recalcLevel();
+
+  saveState();
+  closeModal('detailModal');
+  renderAll();
+});
+
+document.getElementById('saveScheduleBtn').addEventListener('click', ()=>{
+  const a = state.activities.find(x=>x.id===currentDetailId);
+  if(!a) return;
+  a.time = document.getElementById('editTime').value || null;
+  a.duration = Number(document.getElementById('editDuration').value) || 30;
+  saveState();
+  closeModal('detailModal');
+  renderAll();
+});
+
+// ---------- History Modal ----------
+function renderHistoryModal(){
+  const list = document.getElementById('historyList');
+  list.innerHTML='';
+  const all = [];
+  state.activities.forEach(a=>{ a.completions.forEach(c=>all.push({name:a.name, ...c})); });
+  if(all.length===0){ list.innerHTML = '<div style="color:#aaa;">No history yet</div>'; return; }
+  all.sort((x,y)=>y.date.localeCompare(x.date)).forEach(c=>{
+    const div = document.createElement('div');
+    div.className='history-item';
+    div.innerHTML = `<span>${c.date} — ${c.name}</span><span>${'⭐'.repeat(c.stars)} (+${c.points}pt)</span>`;
+    list.appendChild(div);
+  });
+}
+
+// ---------- Rewards Modal ----------
+function renderRewardsModal(){
+  const earned = state.activities.reduce((sum,a)=>sum+a.completions.reduce((s,c)=>s+c.points,0),0);
+  const spent = state.redemptions.reduce((s,r)=>s+r.cost,0);
+  document.getElementById('rewardsSummary').textContent =
+    `🎁 ${state.points}pt available · Lifetime: +${earned}pt earned / -${spent}pt spent`;
+
+  const list = document.getElementById('redeemHistory');
+  list.innerHTML='';
+  if(state.redemptions.length===0){ list.innerHTML = '<div style="color:#aaa;font-size:13px;">No redemptions yet</div>'; return; }
+  state.redemptions.slice().sort((x,y)=>y.date.localeCompare(x.date)).forEach(r=>{
+    const div = document.createElement('div');
+    div.className='history-item';
+    div.innerHTML = `<span>${r.date} — ${r.name}</span><span>-${r.cost}pt</span>`;
+    list.appendChild(div);
+  });
+}
+
+document.getElementById('redeemBtn').addEventListener('click', ()=>{
+  const name = document.getElementById('rewardName').value.trim();
+  const cost = Number(document.getElementById('rewardCost').value);
+  if(!name || !cost || cost<=0){ alert('Enter a valid reward name and cost'); return; }
+  if(cost > state.points){ alert('Not enough points'); return; }
+  state.points -= cost;
+  state.redemptions.push({date: todayStr(), name, cost});
+  saveState();
+  document.getElementById('rewardName').value='';
+  document.getElementById('rewardCost').value='';
+  renderRewardsModal();
+  renderStats();
+});
+
+// ---------- Rules Board ----------
+function renderRulesBoard(){
+  const board = document.getElementById('rulesBoard');
+  board.innerHTML='';
+  if(state.rules.length===0){
+    board.innerHTML = '<div style="color:#fff;opacity:.85;">No rules yet. Add your first one below 👇</div>';
+    return;
+  }
+  state.rules.forEach(r=>{
+    const note = document.createElement('div');
+    note.className='sticky-note';
+    note.style.background = r.color;
+    note.style.transform = `rotate(${r.rotate}deg)`;
+    note.innerHTML = `<div class="pin">📌</div>${r.text}<button class="del-note" data-id="${r.id}">✕</button>`;
+    board.appendChild(note);
+  });
+  board.querySelectorAll('.del-note').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      const id = e.target.dataset.id;
+      state.rules = state.rules.filter(r=>r.id!==id);
+      saveState();
+      renderRulesBoard();
+      renderRulesTip();
+    });
+  });
+}
+
+document.getElementById('addRuleBtn').addEventListener('click', ()=>{
+  const input = document.getElementById('newRuleInput');
+  const text = input.value.trim();
+  if(!text) return;
+  state.rules.push({
+    id: uid(), text,
+    color: PASTEL_COLORS[Math.floor(Math.random()*PASTEL_COLORS.length)],
+    rotate: Math.floor(Math.random()*8)-4
+  });
+  input.value='';
+  saveState();
+  renderRulesBoard();
+  renderRulesTip();
+});
+
+// ---------- What Now ----------
+let whatNowCurrentId = null;
+
+document.getElementById('whatNowBtn').addEventListener('click', ()=>{
+  showWhatNow();
+  openModal('whatNowModal');
+});
+
+function showWhatNow(){
+  const candidates = state.activities.filter(a=>!isDoneToday(a));
+  const card = document.getElementById('whatNowCard');
+  const doItBtn = document.getElementById('doItBtn');
+  if(candidates.length===0){
+    card.textContent = '🎉 Everything is done for today!';
+    whatNowCurrentId = null;
+    doItBtn.disabled = true;
+    return;
+  }
+  const pick = candidates[Math.floor(Math.random()*candidates.length)];
+  whatNowCurrentId = pick.id;
+  card.textContent = pick.memo ? `${pick.name} — ${pick.memo}` : pick.name;
+  doItBtn.disabled = false;
+}
+
+document.getElementById('shuffleBtn').addEventListener('click', showWhatNow);
+document.getElementById('doItBtn').addEventListener('click', ()=>{
+  if(!whatNowCurrentId) return;
+  closeModal('whatNowModal');
+  openDetail(whatNowCurrentId);
+});
+
+// ---------- Init ----------
+applyMomentumDecay();
+renderAll();
+scrollToNow();
+setInterval(updateNowLine, 30000);
