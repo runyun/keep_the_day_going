@@ -10,7 +10,6 @@
 
 <div id="app">
 
-  <!-- STICKY TOP AREA -->
   <div id="stickyTop">
     <div id="headerRow">
       <button id="menuBtn" class="icon-btn">☰</button>
@@ -19,6 +18,7 @@
         <button data-action="history">📊 History</button>
         <button data-action="rewards">🎁 Rewards</button>
         <button data-action="rules">📌 Rules</button>
+        <button data-action="todo">📅 To-Do</button>
         <button data-action="reset" style="color:#e53935;">🗑 Reset All Data</button>
       </div>
       <button id="whatNowBtn" class="pill-btn">🎲 What Now</button>
@@ -28,6 +28,8 @@
       <span id="rulesTipText">📌 No rules yet — add one!</span>
       <span class="chevron">▾</span>
     </div>
+
+    <div id="todoTagRow" class="todo-tag-row hidden"></div>
 
     <div id="statsBar">
       <div class="stat-row">
@@ -54,7 +56,6 @@
     </div>
   </div>
 
-  <!-- SCROLLABLE TIMELINE -->
   <div id="timelineContainer">
     <div id="timeline"></div>
   </div>
@@ -69,9 +70,9 @@
     <div class="modal-header"><span>Add Activity</span><button class="close-btn" data-close="addModal">✕</button></div>
     <div class="modal-body">
       <label>Name</label>
-      <input type="text" id="addName" placeholder="e.g. Morning Run">
-      <label>Memo (optional)</label>
-      <input type="text" id="addMemo" placeholder="e.g. 5km jog around the park">
+      <input type="text" id="addName" placeholder="e.g. Push-ups">
+      <label>Plan / Memo (optional)</label>
+      <input type="text" id="addMemo" placeholder="e.g. 10 reps">
       <label>Start time (optional)</label>
       <input type="time" id="addTime">
       <label>Duration (min)</label>
@@ -94,14 +95,19 @@
         <button class="close-btn" data-close="detailModal">✕</button>
       </div>
       <div id="detailMoreMenu" class="dropdown hidden" style="right:40px;left:auto;top:44px;">
-        <button id="deleteTodayBtn">Delete Today</button>
         <button id="deleteActivityBtn">Delete Activity</button>
       </div>
     </div>
     <div class="modal-body">
       <div id="detailStreak" class="streak-text">🔥 0 day streak</div>
 
-      <button id="completeBtn" class="btn-primary full-width">✓ Mark Complete</button>
+      <label>Plan / Memo</label>
+      <input type="text" id="detailMemo" placeholder="e.g. 10 reps">
+
+      <div class="section-label">Today</div>
+      <div id="detailToday" class="history-list"></div>
+
+      <button id="completeBtn" class="btn-primary full-width">✓ Log Completion</button>
       <div id="starPicker" class="star-picker hidden">
         <div class="section-label">How hard was it?</div>
         <div class="star-options">
@@ -140,12 +146,22 @@
     <div class="modal-header"><span>🎁 Rewards</span><button class="close-btn" data-close="rewardsModal">✕</button></div>
     <div class="modal-body">
       <div id="rewardsSummary" class="rewards-summary"></div>
-      <div class="section-label">Redeem a reward</div>
-      <input type="text" id="rewardName" placeholder="Reward name e.g. Watch a movie">
-      <input type="number" id="rewardCost" placeholder="Cost (pt)" min="1">
-      <button id="redeemBtn" class="btn-primary full-width">Redeem</button>
-      <div class="section-label">Redemption History</div>
-      <div id="redeemHistory" class="history-list"></div>
+
+      <div class="section-label">My Rewards</div>
+      <div id="rewardPresetList" class="preset-list"></div>
+      <div class="add-rule-row">
+        <input type="text" id="presetName" placeholder="Reward name">
+        <input type="number" id="presetCost" placeholder="pt" min="1" style="max-width:70px;">
+        <button id="addPresetBtn" class="btn-primary">Save</button>
+      </div>
+
+      <div class="section-label">Redemption Stats</div>
+      <div class="tab-row">
+        <button class="tab-btn active" data-tab="week">This Week</button>
+        <button class="tab-btn" data-tab="all">All Time</button>
+      </div>
+      <div id="rewardStatsList" class="history-list"></div>
+      <button id="rewardStatsMore" class="btn-secondary full-width hidden"></button>
     </div>
   </div>
 </div>
@@ -159,6 +175,22 @@
       <div class="add-rule-row">
         <input type="text" id="newRuleInput" placeholder="+ Add new rule...">
         <button id="addRuleBtn" class="btn-primary">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- To-Do Board -->
+<div id="todoModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header"><span>📅 To-Do</span><button class="close-btn" data-close="todoModal">✕</button></div>
+    <div class="modal-body corkboard">
+      <div id="todoBoard" class="rules-board"></div>
+      <div class="add-rule-row" style="flex-wrap:wrap;">
+        <input type="date" id="newTodoDate" style="flex:1 1 100%;">
+        <input type="time" id="newTodoTime" style="flex:1;">
+        <input type="text" id="newTodoText" placeholder="What to do?" style="flex:2;">
+        <button id="addTodoBtn" class="btn-primary" style="flex:1 1 100%;">Add</button>
       </div>
     </div>
   </div>
