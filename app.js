@@ -90,6 +90,23 @@ function formatTime12(hhmm){
   return `${h12}:${String(m).padStart(2,'0')}${period}`;
 }
 
+function formatTimeShort(hhmm){
+  if(!hhmm) return '';
+  const [h,m] = hhmm.split(':').map(Number);
+  if(m === 0) return String(h);
+  return `${h}${String(m).padStart(2,'0')}`;
+}
+
+function formatTimeRangeShort(startTime, duration){
+  if(!startTime) return '';
+  const endMinutes = timeToMinutes(startTime) + Number(duration || 0);
+  const endHour = Math.floor(endMinutes / 60) % 24;
+  const endMinute = endMinutes % 60;
+  const startShort = formatTimeShort(startTime);
+  const endShort = endMinute === 0 ? String(endHour) : `${endHour}${String(endMinute).padStart(2,'0')}`;
+  return `${startShort}-${endShort}`;
+}
+
 function formatDateShort(dateStr){
   const [y,m,d] = dateStr.split('-');
   return `${Number(m)}/${Number(d)}`;
@@ -388,7 +405,8 @@ function renderTimeline(){
     card.className = 'activity-card' + (done?' done':'') + (overdue?' overdue':'');
     card.style.top = top+'px';
     card.style.height = height+'px';
-    card.innerHTML = `<span class="name">${done?'✓ ':''}${a.name}</span>${memo?' — '+memo:''}${done?' ×'+todays.length:''}${streak>0?`<span class="streak-badge">🔥${streak}</span>`:''}`;
+    const timeRange = formatTimeRangeShort(a.time, a.duration);
+    card.innerHTML = `${timeRange ? `<span>${done?'✓ ':''}</span><span class="time-range">${timeRange}</span>` : ''}<span class="name">${a.name}</span>${memo?' — '+memo:''}${done?' ×'+todays.length:''}${streak>0?`<span class="streak-badge">🔥${streak}</span>`:''}`;
     card.addEventListener('click', ()=>openDetail(a.id));
     timeline.appendChild(card);
   });
