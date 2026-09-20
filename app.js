@@ -8,7 +8,7 @@ function loadState(){
   if(saved){ try { return JSON.parse(saved); } catch(e){} }
   return {
     level:1, xp:0, xpToNext:70,
-    momentum:70, points:0,
+    momentum:50, points:0,
     lastActiveDate: todayStr(),
     activities: [], rules: [], redemptions: [], rewardPresets: [], todos: []
   };
