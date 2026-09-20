@@ -69,12 +69,14 @@ function loadState(){
     level:1, xp:0, xpToNext:70,
     momentum:50, points:0,
     lastActiveDate: todayStr(),
+    skipDay: false,
     activities: [], rules: [], redemptions: [], rewardPresets: [], todos: []
   };
 }
 let state = loadState();
 if(!state.rewardPresets) state.rewardPresets = [];
 if(!state.todos) state.todos = [];
+if(state.skipDay === undefined) state.skipDay = false;
 function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
 // ---------- Helpers ----------
@@ -120,7 +122,18 @@ function getHeaderDateText(){
 
 function renderHeaderDate(){
   const el = document.getElementById('todayHeaderDate');
-  if(el) el.textContent = getHeaderDateText();
+  if(!el) return;
+  const baseText = getHeaderDateText();
+  el.textContent = state.skipDay ? `${baseText} • SKIP` : baseText;
+  el.classList.toggle('skip-active', !!state.skipDay);
+}
+
+function updateSkipDayButton(){
+  const btn = document.getElementById('skipDayMenuBtn');
+  if(!btn) return;
+  btn.classList.toggle('active', !!state.skipDay);
+  btn.textContent = state.skipDay ? '✓ Skip Day' : '⏭ Skip Day';
+  renderHeaderDate();
 }
 
 function fmtDate(d){
@@ -211,6 +224,14 @@ function showMomentumPopup(change, ratio, completedYesterday, totalTasks){
 function applyDailyMomentumUpdate(){
   const today = todayStr();
   if(state.lastActiveDate === today) return; // already handled today
+
+  if(state.skipDay){
+    state.lastActiveDate = today;
+    state.skipDay = false;
+    saveState();
+    updateSkipDayButton();
+    return;
+  }
 
   const yestDate = new Date();
   yestDate.setDate(yestDate.getDate()-1);
@@ -441,6 +462,7 @@ function renderAll(){
   renderTodoTags();
   renderUnscheduled();
   renderTimeline();
+  updateSkipDayButton();
 }
 
 // ---------- Add Activity ----------
@@ -1018,6 +1040,12 @@ function renderWhatNowCard(pickNew){
   }, 80);
 }
 
+document.getElementById('skipDayMenuBtn').addEventListener('click', ()=>{
+  state.skipDay = !state.skipDay;
+  saveState();
+  updateSkipDayButton();
+  closeModal('menuDropdown');
+});
 document.getElementById('whatNowBtn').addEventListener('click', ()=>{
   openModal('whatNowModal');
   renderWhatNowCard(true);
@@ -1036,6 +1064,7 @@ applyDailyMomentumUpdate();
 recalcPoints();
 recalcLevel();
 renderHeaderDate();
+updateSkipDayButton();
 renderAll();
 scrollToNow();
 
