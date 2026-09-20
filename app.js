@@ -127,6 +127,10 @@ function fmtDate(d){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 
+function getScheduledActivities(){
+  return state.activities.filter(a => a && a.time);
+}
+
 function getTodayCompletions(a){ return a.completions.filter(c=>c.date===todayStr()); }
 
 function getCardMemo(a){
@@ -212,7 +216,8 @@ function applyDailyMomentumUpdate(){
   yestDate.setDate(yestDate.getDate()-1);
   const yesterdayStr = fmtDate(yestDate);
 
-  const totalTasks = state.activities.length;
+  const scheduledActivities = getScheduledActivities();
+  const totalTasks = scheduledActivities.length;
 
   if(totalTasks === 0){
     // Nothing to judge yet — just move the date forward, no penalty/reward.
@@ -221,7 +226,7 @@ function applyDailyMomentumUpdate(){
     return;
   }
 
-  const completedYesterday = state.activities.filter(a =>
+  const completedYesterday = scheduledActivities.filter(a =>
     a.completions.some(c => c.date === yesterdayStr)
   ).length;
 
@@ -560,7 +565,7 @@ function completeActivity(id, stars){
 
   document.getElementById('starPicker').classList.add('hidden');
 
-  pendingSpin = { activityId: id, completionId: completion.id, stars, taskCount: state.activities.length };
+  pendingSpin = { activityId: id, completionId: completion.id, stars, taskCount: getScheduledActivities().length };
 
   closeModal('detailModal');
   openSpinFlow();
