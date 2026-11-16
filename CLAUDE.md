@@ -41,9 +41,9 @@ Spin odds are documented in the comment above `getSpinProbabilities()` (momentum
 
 `applyDailyMomentumUpdate()` runs once at page load. If `state.lastActiveDate` isn't today, it scores yesterday's completion ratio over scheduled activities via `computeMomentumShift()` and shows a popup. `state.skipDay` (toggled from the menu) suppresses the next rollover's adjustment and then clears itself. Rollover only happens on load — a page left open across midnight will not trigger it.
 
-### Date handling gotcha
+### Date handling
 
-Two date-string helpers coexist: `todayStr()` uses `toISOString()` (**UTC**), while `fmtDate()` uses **local** date parts. Completion dates, streaks, and to-do overdue checks use the UTC one; the "yesterday" calculation in the daily rollover and the weekly reward range use the local one. These disagree for part of the day in any non-UTC timezone, so be careful which one new date logic uses.
+All `YYYY-MM-DD` date strings come from `dateStr(d = new Date())`, which uses the **local** calendar day. Do not use `toISOString()` for dates — it is UTC and reintroduces an off-by-one-day bug outside UTC. Completions saved before this helper existed may carry UTC dates.
 
 ### Rendering
 

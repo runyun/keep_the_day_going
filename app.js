@@ -68,7 +68,7 @@ function loadState(){
   return {
     level:1, xp:0, xpToNext:70,
     momentum:50, points:0,
-    lastActiveDate: todayStr(),
+    lastActiveDate: dateStr(),
     skipDay: false,
     activities: [], rules: [], redemptions: [], rewardPresets: [], todos: []
   };
@@ -80,7 +80,10 @@ if(state.skipDay === undefined) state.skipDay = false;
 function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
 // ---------- Helpers ----------
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+// The only way to build a date string. Local time; defaults to today.
+function dateStr(d = new Date()){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function timeToMinutes(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 
@@ -109,8 +112,8 @@ function formatTimeRangeShort(startTime, duration){
   return `${startShort}-${endShort}`;
 }
 
-function formatDateShort(dateStr){
-  const [y,m,d] = dateStr.split('-');
+function formatDateShort(dateText){
+  const [y,m,d] = dateText.split('-');
   return `${Number(m)}/${Number(d)}`;
 }
 
@@ -136,15 +139,11 @@ function updateSkipDayButton(){
   renderHeaderDate();
 }
 
-function fmtDate(d){
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
-
 function getScheduledActivities(){
   return state.activities.filter(a => a && a.time);
 }
 
-function getTodayCompletions(a){ return a.completions.filter(c=>c.date===todayStr()); }
+function getTodayCompletions(a){ return a.completions.filter(c=>c.date===dateStr()); }
 
 function getCardMemo(a){
   const todays = getTodayCompletions(a);
@@ -156,9 +155,9 @@ function getStreak(a){
   const set = new Set(a.completions.map(c=>c.date));
   let streak=0;
   let d = new Date();
-  if(!set.has(todayStr())) d.setDate(d.getDate()-1);
+  if(!set.has(dateStr())) d.setDate(d.getDate()-1);
   while(true){
-    const ds = d.toISOString().slice(0,10);
+    const ds = dateStr(d);
     if(set.has(ds)){ streak++; d.setDate(d.getDate()-1); } else break;
   }
   return streak;
@@ -222,7 +221,7 @@ function showMomentumPopup(change, ratio, completedYesterday, totalTasks){
 }
 
 function applyDailyMomentumUpdate(){
-  const today = todayStr();
+  const today = dateStr();
   if(state.lastActiveDate === today) return; // already handled today
 
   if(state.skipDay){
@@ -235,7 +234,7 @@ function applyDailyMomentumUpdate(){
 
   const yestDate = new Date();
   yestDate.setDate(yestDate.getDate()-1);
-  const yesterdayStr = fmtDate(yestDate);
+  const yesterdayStr = dateStr(yestDate);
 
   const scheduledActivities = getScheduledActivities();
   const totalTasks = scheduledActivities.length;
@@ -374,7 +373,7 @@ function renderTodoTags(){
   if(dates.length===0){ container.classList.add('hidden'); container.innerHTML=''; return; }
   container.classList.remove('hidden');
   container.innerHTML = `<span class="todo-label">📅</span>` + dates.map(d=>{
-    const overdue = d < todayStr();
+    const overdue = d < dateStr();
     return `<span class="todo-tag ${overdue?'overdue':''}" data-date="${d}">${formatDateShort(d)}</span>`;
   }).join('');
   container.querySelectorAll('.todo-tag').forEach(tag=>{
@@ -513,7 +512,7 @@ document.getElementById('detailMemo').addEventListener('blur', ()=>{
 
 function renderDetailToday(a){
   const container = document.getElementById('detailToday');
-  const todays = a.completions.filter(c=>c.date===todayStr());
+  const todays = a.completions.filter(c=>c.date===dateStr());
   if(todays.length===0){
     container.innerHTML = '<div style="color:#aaa;font-size:13px;">Not completed yet today</div>';
     return;
@@ -535,7 +534,7 @@ function renderDetailToday(a){
 function renderDetailHistory(a){
   const list = document.getElementById('detailHistory');
   list.innerHTML='';
-  const past = a.completions.filter(c=>c.date!==todayStr());
+  const past = a.completions.filter(c=>c.date!==dateStr());
   if(past.length===0){
     list.innerHTML = '<div style="color:#aaa;font-size:13px;">No history yet</div>';
     return;
@@ -572,14 +571,14 @@ function completeActivity(id, stars){
   const momentumGained = newMomentum - oldMomentum;
 
   const completion = {
-    id: uid(), date: todayStr(), at, memo: a.memo || '',
+    id: uid(), date: dateStr(), at, memo: a.memo || '',
     stars, points: stars, xpGained, momentumGained,
     spin: { tier: 'miss', bonusPoints: 0, bonusXP: 0 }
   };
   a.completions.push(completion);
 
   state.momentum = newMomentum;
-  state.lastActiveDate = todayStr();
+  state.lastActiveDate = dateStr();
 
   recalcPoints();
   recalcLevel();
@@ -724,7 +723,7 @@ document.getElementById('deleteActivityBtn').addEventListener('click', ()=>{
   if(!confirm('Delete this activity permanently?')) return;
   const a = state.activities.find(x=>x.id===currentDetailId);
   if(a){
-    a.completions.filter(c=>c.date===todayStr()).forEach(c=>{
+    a.completions.filter(c=>c.date===dateStr()).forEach(c=>{
       state.momentum = Math.max(0, state.momentum - (c.momentumGained || 0));
     });
   }
@@ -797,7 +796,7 @@ function renderRewardPresets(){
 function redeemReward(name, cost){
   if(cost > state.points){ alert('Not enough points'); return; }
   state.points -= cost;
-  state.redemptions.push({id: uid(), date: todayStr(), name, cost});
+  state.redemptions.push({id: uid(), date: dateStr(), name, cost});
   saveState();
   renderRewardsModal();
   renderStats();
@@ -830,7 +829,7 @@ function getWeekRangeStrings(){
   const diffToMonday = (day===0 ? -6 : 1-day);
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate()+diffToMonday);
   const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate()+6);
-  return { startStr: fmtDate(monday), endStr: fmtDate(sunday) };
+  return { startStr: dateStr(monday), endStr: dateStr(sunday) };
 }
 
 function getRedemptionsInRange(startStr, endStr){
@@ -948,7 +947,7 @@ function renderTodoBoard(){
     return ak.localeCompare(bk);
   });
   sorted.forEach((t,i)=>{
-    const overdue = t.date < todayStr();
+    const overdue = t.date < dateStr();
     const note = document.createElement('div');
     note.className = 'sticky-note' + (overdue ? ' overdue-note' : '');
     note.style.background = overdue ? '#ddd' : PASTEL_COLORS[i % PASTEL_COLORS.length];
