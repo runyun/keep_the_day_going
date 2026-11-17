@@ -47,6 +47,6 @@ All `YYYY-MM-DD` date strings come from `dateStr(d = new Date())`, which uses th
 
 ### Rendering
 
-Render functions rebuild their container's `innerHTML` from `state` and re-attach listeners each time. User-entered text (names, memos, rules, to-dos) is interpolated into `innerHTML` unescaped. The timeline is absolutely positioned at `HOUR_HEIGHT` (60) px per hour, matching the fixed `height:1440px` on `#timeline` in `style.css` — change them together.
+Render functions rebuild their container's `innerHTML` from `state` and re-attach listeners each time. User-entered text (names, memos, rules, to-dos, reward names) must be wrapped in `escapeHtml()` whenever it is interpolated into `innerHTML`; `textContent` needs no escaping. The timeline is absolutely positioned at `HOUR_HEIGHT` (60) px per hour, matching the fixed `height:1440px` on `#timeline` in `style.css` — change them together.
 
 Modals are shown/hidden by toggling the `hidden` class via `openModal(id)` / `closeModal(id)`; close buttons use `data-close="<modalId>"`.

@@ -84,6 +84,10 @@ function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); 
 function dateStr(d = new Date()){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
+// Makes user-typed text safe to place inside innerHTML.
+function escapeHtml(text){
+  return String(text ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function timeToMinutes(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 
@@ -395,7 +399,7 @@ function renderUnscheduled(){
     const memo = getCardMemo(a);
     const div = document.createElement('div');
     div.className = 'unscheduled-item' + (todays.length>0 ? ' done':'');
-    div.innerHTML = `<span>${todays.length>0?'✓ ':''}${a.name}${memo?' — '+memo:''}${todays.length>0?' ×'+todays.length:''}</span>`;
+    div.innerHTML = `<span>${todays.length>0?'✓ ':''}${escapeHtml(a.name)}${memo?' — '+escapeHtml(memo):''}${todays.length>0?' ×'+todays.length:''}</span>`;
     div.addEventListener('click', ()=>openDetail(a.id));
     container.appendChild(div);
   });
@@ -431,7 +435,7 @@ function renderTimeline(){
     card.style.top = top+'px';
     card.style.height = height+'px';
     const timeRange = formatTimeRangeShort(a.time, a.duration);
-    card.innerHTML = `${timeRange ? `<span>${done?'✓ ':''}</span><span class="time-range">${timeRange}</span>` : ''}<span class="name">${a.name}</span>${memo?' — '+memo:''}${done?' ×'+todays.length:''}${streak>0?`<span class="streak-badge">🔥${streak}</span>`:''}`;
+    card.innerHTML = `${timeRange ? `<span>${done?'✓ ':''}</span><span class="time-range">${timeRange}</span>` : ''}<span class="name">${escapeHtml(a.name)}</span>${memo?' — '+escapeHtml(memo):''}${done?' ×'+todays.length:''}${streak>0?`<span class="streak-badge">🔥${streak}</span>`:''}`;
     card.addEventListener('click', ()=>openDetail(a.id));
     timeline.appendChild(card);
   });
@@ -521,7 +525,7 @@ function renderDetailToday(a){
   todays.forEach(c=>{
     const div = document.createElement('div');
     div.className='history-item';
-    div.innerHTML = `<span>${formatTime12(c.at)} — ${c.memo||''} ${'⭐'.repeat(c.stars)}</span><span>${c.points}pt${spinBadgeHTML(c)} <button class="del-completion" data-id="${c.id}">✕</button></span>`;
+    div.innerHTML = `<span>${formatTime12(c.at)} — ${escapeHtml(c.memo)} ${'⭐'.repeat(c.stars)}</span><span>${c.points}pt${spinBadgeHTML(c)} <button class="del-completion" data-id="${c.id}">✕</button></span>`;
     container.appendChild(div);
   });
   container.querySelectorAll('.del-completion').forEach(btn=>{
@@ -542,7 +546,7 @@ function renderDetailHistory(a){
   past.slice().sort((x,y)=>y.date.localeCompare(x.date)).forEach(c=>{
     const div = document.createElement('div');
     div.className='history-item';
-    div.innerHTML = `<span>${c.date} — ${c.memo||''}</span><span>${'⭐'.repeat(c.stars)} (${c.points}pt)${spinBadgeHTML(c)}</span>`;
+    div.innerHTML = `<span>${c.date} — ${escapeHtml(c.memo)}</span><span>${'⭐'.repeat(c.stars)} (${c.points}pt)${spinBadgeHTML(c)}</span>`;
     list.appendChild(div);
   });
 }
@@ -755,7 +759,7 @@ function renderHistoryModal(){
   all.sort((x,y)=> (y.date+y.at).localeCompare(x.date+x.at)).forEach(c=>{
     const div = document.createElement('div');
     div.className='history-item';
-    div.innerHTML = `<span>${c.date} — ${c.name}${c.memo?' ('+c.memo+')':''}</span><span>${'⭐'.repeat(c.stars)} (${c.points}pt)${spinBadgeHTML(c)}</span>`;
+    div.innerHTML = `<span>${c.date} — ${escapeHtml(c.name)}${c.memo?' ('+escapeHtml(c.memo)+')':''}</span><span>${'⭐'.repeat(c.stars)} (${c.points}pt)${spinBadgeHTML(c)}</span>`;
     list.appendChild(div);
   });
 }
@@ -771,7 +775,7 @@ function renderRewardPresets(){
   state.rewardPresets.forEach(p=>{
     const div = document.createElement('div');
     div.className='preset-item';
-    div.innerHTML = `<span>${p.name} — ${p.cost}pt</span>
+    div.innerHTML = `<span>${escapeHtml(p.name)} — ${p.cost}pt</span>
       <div class="preset-actions">
         <button class="btn-primary" data-redeem="${p.id}">Redeem</button>
         <button class="btn-secondary" data-delpreset="${p.id}">✕</button>
@@ -860,7 +864,7 @@ function renderRewardStats(){
   shown.forEach(g=>{
     const div = document.createElement('div');
     div.className='history-item';
-    div.innerHTML = `<span>${g.name}</span><span>×${g.count} (${g.total}pt)</span>`;
+    div.innerHTML = `<span>${escapeHtml(g.name)}</span><span>×${g.count} (${g.total}pt)</span>`;
     container.appendChild(div);
   });
   if(grouped.length > 3){
@@ -906,7 +910,7 @@ function renderRulesBoard(){
     const note = document.createElement('div');
     note.className = 'sticky-note';
     note.style.background = PASTEL_COLORS[i % PASTEL_COLORS.length];
-    note.innerHTML = `<span class="pin">📌</span><span class="todo-text">${r.text}</span><button class="del-note" data-id="${r.id}">✕</button>`;
+    note.innerHTML = `<span class="pin">📌</span><span class="todo-text">${escapeHtml(r.text)}</span><button class="del-note" data-id="${r.id}">✕</button>`;
     board.appendChild(note);
   });
   board.querySelectorAll('.del-note').forEach(btn=>{
@@ -953,7 +957,7 @@ function renderTodoBoard(){
     note.style.background = overdue ? '#ddd' : PASTEL_COLORS[i % PASTEL_COLORS.length];
     note.innerHTML = `<span class="pin">📌</span>
       <div class="todo-date">${formatDateShort(t.date)}${t.time ? ' · '+formatTime12(t.time) : ''}</div>
-      <div class="todo-text">${t.text}</div>
+      <div class="todo-text">${escapeHtml(t.text)}</div>
       <button class="del-note" data-id="${t.id}">✕</button>`;
     board.appendChild(note);
   });
