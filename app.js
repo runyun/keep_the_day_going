@@ -74,6 +74,9 @@ function loadState(){
   };
 }
 let state = loadState();
+if(!state.activities) state.activities = [];
+if(!state.rules) state.rules = [];
+if(!state.redemptions) state.redemptions = [];
 if(!state.rewardPresets) state.rewardPresets = [];
 if(!state.todos) state.todos = [];
 if(state.skipDay === undefined) state.skipDay = false;
@@ -335,6 +338,7 @@ document.querySelectorAll('#menuDropdown button').forEach(btn=>{
     if(action==='rewards'){ renderRewardsModal(); openModal('rewardsModal'); }
     if(action==='rules'){ renderRulesBoard(); openModal('rulesModal'); }
     if(action==='todo'){ renderTodoBoard(); openModal('todoModal'); }
+    if(action==='backup'){ resetImportPreview(); openModal('backupModal'); }
     if(action==='reset'){
       if(confirm('This will erase ALL data (activities, history, points, rules, to-dos). Are you sure?')){
         localStorage.removeItem(STORAGE_KEY);
@@ -343,6 +347,163 @@ document.querySelectorAll('#menuDropdown button').forEach(btn=>{
     }
   });
 });
+// ---------- Backup: export / import ----------
+let pendingImport = null; // parsed state waiting for the user to confirm
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `keep-the-day-going-${dateStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000); // some browsers start the download asynchronously
+});
+
+function resetImportPreview(){
+  pendingImport = null;
+  document.getElementById('importFile').value = '';
+  document.getElementById('importPreview').classList.add('hidden');
+  document.getElementById('importConfirmBtn').classList.add('hidden');
+}
+
+// Checks a parsed backup and builds a clean state from it.
+// Returns { error } for files that can't be used, or { data } with every field
+// the app relies on present and of the right type (so startup and renders can't crash).
+function normalizeBackup(raw){
+  if(!isPlainObject(raw)) return { error: 'This file is not a backup.' };
+  if(!Array.isArray(raw.activities)) return { error: 'This file has no activities list.' };
+  for(const key of ['rules','redemptions','rewardPresets','todos']){
+    if(raw[key] !== undefined && !Array.isArray(raw[key])) return { error: `"${key}" should be a list.` };
+    if((raw[key]||[]).some(item => !isPlainObject(item))) return { error: `"${key}" has an entry that isn't valid.` };
+  }
+  if(raw.lastActiveDate !== undefined && !isValidDate(raw.lastActiveDate)) return { error: 'The last active date is not a valid date.' };
+  if(raw.momentum !== undefined && !(Number.isFinite(raw.momentum) && raw.momentum >= 0 && raw.momentum <= 100)) return { error: 'Momentum should be a number from 0 to 100.' };
+
+  const activities = [];
+  for(const [i, a] of raw.activities.entries()){
+    if(!isPlainObject(a)) return { error: `Activity ${i+1} isn't valid.` };
+    if(typeof a.name !== 'string' || !a.name) return { error: `Activity ${i+1} has no name.` };
+    if(a.time !== null && a.time !== undefined && !isValidTime(a.time)) return { error: `"${a.name}" has an invalid start time.` };
+    if(!Array.isArray(a.completions)) return { error: `"${a.name}" has no completions list.` };
+    const completions = [];
+    for(const c of a.completions){
+      if(!isPlainObject(c) || !isValidDate(c.date) || !Number.isFinite(c.points)) return { error: `"${a.name}" has a completion that isn't valid.` };
+      const stars = clampInt(c.stars, 1, 3, 1);
+      const spin = isPlainObject(c.spin) ? c.spin : {};
+      completions.push({
+        id: safeId(c.id), date: c.date, at: isValidTime(c.at) ? c.at : '',
+        memo: typeof c.memo === 'string' ? c.memo : '',
+        stars, points: c.points,
+        xpGained: Number.isFinite(c.xpGained) ? c.xpGained : stars*10,
+        momentumGained: Number.isFinite(c.momentumGained) ? c.momentumGained : 0,
+        spin: {
+          tier: SPIN_LABELS[spin.tier] ? spin.tier : 'miss',
+          bonusPoints: Number.isFinite(spin.bonusPoints) ? spin.bonusPoints : 0,
+          bonusXP: Number.isFinite(spin.bonusXP) ? spin.bonusXP : 0,
+        },
+      });
+    }
+    activities.push({
+      id: safeId(a.id), name: a.name, memo: typeof a.memo === 'string' ? a.memo : '',
+      time: a.time || null,
+      duration: Number.isFinite(a.duration) && a.duration > 0 ? a.duration : 30,
+      completions,
+    });
+  }
+
+  const redemptions = [];
+  for(const r of raw.redemptions || []){
+    if(!Number.isFinite(r.cost)) return { error: 'A redemption has no valid cost.' };
+    redemptions.push({ id: safeId(r.id), date: isValidDate(r.date) ? r.date : dateStr(), name: String(r.name ?? ''), cost: r.cost });
+  }
+  const rewardPresets = [];
+  for(const p of raw.rewardPresets || []){
+    if(!Number.isFinite(p.cost)) return { error: 'A saved reward has no valid cost.' };
+    rewardPresets.push({ id: safeId(p.id), name: String(p.name ?? ''), cost: p.cost });
+  }
+  const todos = [];
+  for(const t of raw.todos || []){
+    if(!isValidDate(t.date)) return { error: 'A to-do has an invalid date.' };
+    todos.push({ id: safeId(t.id), date: t.date, time: isValidTime(t.time) ? t.time : '', text: String(t.text ?? '') });
+  }
+  const rules = (raw.rules || []).map(r => ({ id: safeId(r.id), text: String(r.text ?? '') }));
+
+  return { data: {
+    // level, xp, xpToNext and points are derived; recalcPoints()/recalcLevel() rebuild them on load.
+    level: 1, xp: 0, xpToNext: 70, points: 0,
+    momentum: raw.momentum ?? 50,
+    lastActiveDate: raw.lastActiveDate ?? dateStr(),
+    skipDay: raw.skipDay === true,
+    activities, rules, redemptions, rewardPresets, todos,
+  }};
+}
+function isPlainObject(v){ return !!v && typeof v === 'object' && !Array.isArray(v); }
+// A real calendar day in YYYY-MM-DD form (rejects 2026-13-45).
+function isValidDate(v){
+  if(typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const [y,m,d] = v.split('-').map(Number);
+  return dateStr(new Date(y, m-1, d)) === v;
+}
+function isValidTime(v){
+  if(typeof v !== 'string' || !/^\d{2}:\d{2}$/.test(v)) return false;
+  const [h,m] = v.split(':').map(Number);
+  return h < 24 && m < 60;
+}
+function clampInt(v, min, max, fallback){
+  return Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : fallback;
+}
+// Ids end up in data-id="..." attributes; keep only the shape uid() produces.
+function safeId(v){ return (typeof v === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(v)) ? v : uid(); }
+const plural = (n, word) => `${n} ${n===1 ? word : word.replace(/y$/, 'ie')+'s'}`;
+
+document.getElementById('importPickBtn').addEventListener('click', ()=>{
+  document.getElementById('importFile').click();
+});
+
+document.getElementById('importFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const preview = document.getElementById('importPreview');
+  const confirmBtn = document.getElementById('importConfirmBtn');
+  const reader = new FileReader();
+  const showError = (msg)=>{
+    pendingImport = null;
+    preview.classList.remove('hidden');
+    preview.innerHTML = `⚠️ ${escapeHtml(msg)}`;
+    confirmBtn.classList.add('hidden');
+    e.target.value = ''; // so choosing the same (fixed) file again fires "change"
+  };
+  reader.onerror = ()=> showError('This file could not be read. Try again.');
+  reader.onload = ()=>{
+    let result;
+    try { result = normalizeBackup(JSON.parse(reader.result)); }
+    catch(err){ result = { error: 'This file is not valid JSON.' }; }
+    if(result.error){ showError(result.error); return; }
+    const data = result.data;
+    pendingImport = data;
+    const completions = data.activities.reduce((n,a)=>n+a.completions.length, 0);
+    preview.classList.remove('hidden');
+    preview.innerHTML = `
+      <b>${escapeHtml(file.name)}</b><br>
+      ${plural(data.activities.length,'activity')} · ${plural(completions,'completion')}<br>
+      ${plural(data.rules.length,'rule')} · ${plural(data.todos.length,'to-do')} · ${plural(data.rewardPresets.length,'reward')}<br>
+      Last active ${escapeHtml(data.lastActiveDate)}`;
+    confirmBtn.classList.remove('hidden');
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('importConfirmBtn').addEventListener('click', ()=>{
+  if(!pendingImport) return;
+  if(!confirm('Replace ALL current data with this backup? Consider downloading a backup first.')) return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(pendingImport));
+  // Reload so loadState(), the backfills and the daily rollover all run on the imported data.
+  location.reload();
+});
+
 document.getElementById('rulesTip').addEventListener('click', ()=>{
   renderRulesBoard();
   openModal('rulesModal');
@@ -526,7 +687,7 @@ function renderDetailToday(a){
   todays.forEach(c=>{
     const div = document.createElement('div');
     div.className='history-item';
-    div.innerHTML = `<span>${formatTime12(c.at)} — ${escapeHtml(c.memo)} ${'⭐'.repeat(c.stars)}</span><span>${c.points}pt${spinBadgeHTML(c)} <button class="del-completion" data-id="${c.id}">✕</button></span>`;
+    div.innerHTML = `<span>${formatTime12(c.at)} — ${escapeHtml(c.memo)} ${'⭐'.repeat(c.stars)}</span><span>${c.points}pt${spinBadgeHTML(c)} <button class="del-completion" data-id="${escapeHtml(c.id)}">✕</button></span>`;
     container.appendChild(div);
   });
   container.querySelectorAll('.del-completion').forEach(btn=>{
@@ -775,10 +936,10 @@ function renderRewardPresets(){
   state.rewardPresets.forEach(p=>{
     const div = document.createElement('div');
     div.className='preset-item';
-    div.innerHTML = `<span>${escapeHtml(p.name)} — ${p.cost}pt</span>
+    div.innerHTML = `<span>${escapeHtml(p.name)} — ${escapeHtml(p.cost)}pt</span>
       <div class="preset-actions">
-        <button class="btn-primary" data-redeem="${p.id}">Redeem</button>
-        <button class="btn-secondary" data-delpreset="${p.id}">✕</button>
+        <button class="btn-primary" data-redeem="${escapeHtml(p.id)}">Redeem</button>
+        <button class="btn-secondary" data-delpreset="${escapeHtml(p.id)}">✕</button>
       </div>`;
     list.appendChild(div);
   });
@@ -910,7 +1071,7 @@ function renderRulesBoard(){
     const note = document.createElement('div');
     note.className = 'sticky-note';
     note.style.background = PASTEL_COLORS[i % PASTEL_COLORS.length];
-    note.innerHTML = `<span class="pin">📌</span><span class="todo-text">${escapeHtml(r.text)}</span><button class="del-note" data-id="${r.id}">✕</button>`;
+    note.innerHTML = `<span class="pin">📌</span><span class="todo-text">${escapeHtml(r.text)}</span><button class="del-note" data-id="${escapeHtml(r.id)}">✕</button>`;
     board.appendChild(note);
   });
   board.querySelectorAll('.del-note').forEach(btn=>{
@@ -958,7 +1119,7 @@ function renderTodoBoard(){
     note.innerHTML = `<span class="pin">📌</span>
       <div class="todo-date">${formatDateShort(t.date)}${t.time ? ' · '+formatTime12(t.time) : ''}</div>
       <div class="todo-text">${escapeHtml(t.text)}</div>
-      <button class="del-note" data-id="${t.id}">✕</button>`;
+      <button class="del-note" data-id="${escapeHtml(t.id)}">✕</button>`;
     board.appendChild(note);
   });
   board.querySelectorAll('.del-note').forEach(btn=>{

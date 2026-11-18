@@ -20,6 +20,7 @@
         <button data-action="rules">📌 Rules</button>
         <button data-action="todo">📅 To-Do</button>
         <button id="skipDayMenuBtn">⏭ Skip Day</button>
+        <button data-action="backup">💾 Backup</button>
         <button data-action="reset" style="color:#e53935;">🗑 Reset All Data</button>
       </div>
       <div id="todayHeaderDate" class="header-date">--/-- WED</div>
@@ -139,6 +140,25 @@
   <div class="modal">
     <div class="modal-header"><span>📊 History</span><button class="close-btn" data-close="historyModal">✕</button></div>
     <div class="modal-body"><div id="historyList" class="history-list"></div></div>
+  </div>
+</div>
+
+<!-- Backup (export / import) -->
+<div id="backupModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header"><span>💾 Backup</span><button class="close-btn" data-close="backupModal">✕</button></div>
+    <div class="modal-body">
+      <div class="section-label">Export</div>
+      <div class="summary-detail">Save all your data to a .json file.</div>
+      <button id="exportBtn" class="btn-primary full-width">⬇ Download Backup</button>
+
+      <div class="section-label">Import</div>
+      <div class="summary-detail">Load a backup file. This replaces all current data, so download a backup first.</div>
+      <input type="file" id="importFile" accept=".json,application/json" class="hidden">
+      <button id="importPickBtn" class="btn-secondary full-width">📂 Choose Backup File</button>
+      <div id="importPreview" class="summary-detail hidden"></div>
+      <button id="importConfirmBtn" class="btn-primary full-width hidden">Replace My Data</button>
+    </div>
   </div>
 </div>
 
