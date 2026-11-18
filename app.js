@@ -224,34 +224,34 @@ function showMomentumPopup(change, ratio, completedYesterday, totalTasks){
   document.getElementById('momentumPopupCloseBtn').addEventListener('click', close);
 }
 
+// Scores the last day the app handled (state.lastActiveDate), not the calendar
+// day before today, so a tab asleep across several midnights still scores the
+// right day. Returns true if a rollover happened.
 function applyDailyMomentumUpdate(){
   const today = dateStr();
-  if(state.lastActiveDate === today) return; // already handled today
+  const lastDay = state.lastActiveDate;
+  if(lastDay === today) return false; // already handled today
 
   if(state.skipDay){
     state.lastActiveDate = today;
     state.skipDay = false;
     saveState();
-    updateSkipDayButton();
-    return;
+    return true;
   }
-
-  const yestDate = new Date();
-  yestDate.setDate(yestDate.getDate()-1);
-  const yesterdayStr = dateStr(yestDate);
 
   const scheduledActivities = getScheduledActivities();
   const totalTasks = scheduledActivities.length;
 
-  if(totalTasks === 0){
-    // Nothing to judge yet — just move the date forward, no penalty/reward.
+  // Nothing to judge (no tasks, no saved date, or the clock went backwards):
+  // just move the date forward, no penalty/reward.
+  if(totalTasks === 0 || !lastDay || lastDay > today){
     state.lastActiveDate = today;
     saveState();
-    return;
+    return true;
   }
 
   const completedYesterday = scheduledActivities.filter(a =>
-    a.completions.some(c => c.date === yesterdayStr)
+    a.completions.some(c => c.date === lastDay)
   ).length;
 
   const ratio = completedYesterday / totalTasks;
@@ -262,6 +262,7 @@ function applyDailyMomentumUpdate(){
   saveState();
 
   showMomentumPopup(change, ratio, completedYesterday, totalTasks);
+  return true;
 }
 
 function recalcPoints(){
@@ -582,7 +583,6 @@ function completeActivity(id, stars){
   a.completions.push(completion);
 
   state.momentum = newMomentum;
-  state.lastActiveDate = dateStr();
 
   recalcPoints();
   recalcLevel();
@@ -1062,19 +1062,39 @@ document.getElementById('doItBtn').addEventListener('click', ()=>{
   openDetail(whatNowCurrentId);
 });
 
+// ---------- Daily rollover ----------
+// The one rollover entry point: at load, when the tab becomes visible, and
+// once a minute, so a page left open across midnight still rolls over.
+// Skipped while the spin/summary sequence is open, so the momentum popup
+// can't appear in the middle of it; the next check picks it up.
+// Returns true if it rolled over (and already re-rendered everything).
+function checkDayRollover(){
+  if(pendingSpin) return false;
+  if(!applyDailyMomentumUpdate()) return false;
+  renderAll();
+  // An open activity window still lists yesterday's completions as "today";
+  // re-open it so they move to history and can't be deleted as today's.
+  if(currentDetailId && !document.getElementById('detailModal').classList.contains('hidden')){
+    openDetail(currentDetailId);
+  }
+  return true;
+}
+
 // ---------- Init ----------
-applyDailyMomentumUpdate();
 recalcPoints();
 recalcLevel();
-renderHeaderDate();
-updateSkipDayButton();
-renderAll();
+if(!checkDayRollover()) renderAll();
 scrollToNow();
 
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible') checkDayRollover();
+});
+
 setInterval(()=>{ updateNowLine(); }, 30000);
-setInterval(()=>{ renderHeaderDate(); }, 60000);
 
 setInterval(()=>{
+  if(checkDayRollover()) return; // already re-rendered
+  renderHeaderDate();
   renderTodoTags();
   renderTimeline();
 }, 60000);
