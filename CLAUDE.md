@@ -39,7 +39,7 @@ Spin odds are documented in the comment above `getSpinProbabilities()` (momentum
 
 ### Daily rollover
 
-`applyDailyMomentumUpdate()` runs once at page load. If `state.lastActiveDate` isn't today, it scores yesterday's completion ratio over scheduled activities via `computeMomentumShift()` and shows a popup. `state.skipDay` (toggled from the menu) suppresses the next rollover's adjustment and then clears itself. Rollover only happens on load — a page left open across midnight will not trigger it.
+`checkDayRollover()` is the single entry point: it runs at page load, when the tab becomes visible, and once a minute, so a page left open across midnight still rolls over. It waits while a spin/summary sequence is open (`pendingSpin`). It calls `applyDailyMomentumUpdate()`, which, if `state.lastActiveDate` isn't today, scores **that last active day's** completion ratio over scheduled activities via `computeMomentumShift()` and shows a popup, then re-renders (including an open detail modal). `state.skipDay` (toggled from the menu) suppresses the next rollover's adjustment and then clears itself. Only the rollover may set `state.lastActiveDate`; setting it elsewhere (e.g. on completion) would make the next rollover skip scoring that day.
 
 ### Date handling
 
@@ -50,3 +50,7 @@ All `YYYY-MM-DD` date strings come from `dateStr(d = new Date())`, which uses th
 Render functions rebuild their container's `innerHTML` from `state` and re-attach listeners each time. User-entered text (names, memos, rules, to-dos, reward names) must be wrapped in `escapeHtml()` whenever it is interpolated into `innerHTML`; `textContent` needs no escaping. The timeline is absolutely positioned at `HOUR_HEIGHT` (60) px per hour, matching the fixed `height:1440px` on `#timeline` in `style.css` — change them together.
 
 Modals are shown/hidden by toggling the `hidden` class via `openModal(id)` / `closeModal(id)`; close buttons use `data-close="<modalId>"`.
+
+## Claude Code hooks
+
+`.claude/settings.json` runs `.claude/hooks/check-app-js.js` after every Edit/Write; when the edited file is this project's `app.js` it runs `node --check` and reports syntax errors back to Claude (exit code 2).
